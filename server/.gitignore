@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Environment & rahasia — JANGAN commit
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Log runtime
+*.log
+server.log
+server.err.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+client/dist/
+client/.vite/
+
+# Environment & rahasia — JANGAN commit
+.env
+.env.local
+.env.*.local
+serviceAccountKey.json
+*.pem
+
+# Log
+*.log
+npm-debug.log*
+
+# Skrip tes/debug lokal (berisi kredensial dev) — JANGAN commit
+scratch/
+pw-test-*.js
+server/test_*.js
+server/probe-*.cjs
+server/clean-*.cjs
+server/make-*.cjs
+server/scan-*.cjs
+patch-*.cjs
+
+# Editor & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

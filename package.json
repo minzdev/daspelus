@@ -1,0 +1,16 @@
+{
+  "name": "daspeslus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daspeslus — Sistem Pengumpulan Data Peserta dan Lulusan Taruna BPSDMP Kemenhub",
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "build:client": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

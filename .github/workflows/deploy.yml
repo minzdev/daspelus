@@ -1,0 +1,42 @@
+# DASPESLUS — auto-deploy ke VPS SumoPod setiap push ke branch main.
+#
+# Secrets yang wajib diisi di GitHub (Settings → Secrets and variables → Actions):
+#   VPS_HOST  - IP publik VPS (contoh: 103.xxx.xxx.xxx)
+#   VPS_USER  - user deploy (contoh: daspeslus)
+#   VPS_SSH_KEY - isi private key SSH (tanpa passphrase) yang public key-nya
+#                 sudah dipasang di ~/.ssh/authorized_keys user deploy di VPS
+#   APP_DIR   - folder aplikasi di VPS (contoh: /var/www/daspeslus)
+#
+# Catatan: .env TIDAK ikut dari repo — dikelola manual di VPS (sekali saja).
+
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # tombol manual "Run workflow" bila perlu deploy ulang
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.APP_DIR }}
+            echo "== git pull =="
+            git pull origin main
+            echo "== install =="
+            npm run install:all
+            echo "== build frontend =="
+            npm run build:client
+            echo "== reload backend (zero-downtime) =="
+            pm2 reload daspeslus-api || (cd ${{ secrets.APP_DIR }}/server && pm2 start src/index.js --name daspeslus-api)
+            pm2 save
+            echo "== selesai =="
+            pm2 list
