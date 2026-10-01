@@ -1,11 +1,14 @@
 /**
- * Kosongkan DATA TRANSAKSIONAL untuk go-live bersih.
- * DIHAPUS: targets, target_submissions, realizations, realization_diklats, submissions,
- *          unlock_requests, diklats, grad_absorptions, absorption_submissions,
- *          tarunas, taruna_submissions, notifications, activity_logs.
- * DIPERTAHANKAN: users, upts, programs, prodis (master + akun).
+ * Kosongkan DATA untuk go-live bersih.
+ * SELALU DIHAPUS (transaksional): targets, target_submissions, realizations,
+ *   realization_diklats, submissions, unlock_requests, diklats, grad_absorptions,
+ *   absorption_submissions, tarunas, taruna_submissions, notifications, activity_logs.
+ * DIPERTAHANKAN: users, upts.
+ * Dengan flag --full: programs + prodis ikut dikosongkan (master diinput ulang dari menu).
  *
- * Jalankan DI VPS PRODUKSI:  npm run clean:production -- --yes
+ * Jalankan DI VPS PRODUKSI:
+ *   npm run clean:production -- --yes            (transaksional saja)
+ *   npm run clean:production -- --yes --full    (termasuk programs + prodis)
  * (flag --yes wajib sebagai pengaman agar tak terpencet.)
  */
 const path = require("path");
@@ -14,15 +17,16 @@ const { sequelize } = require("../src/models");
 const {
   Target, TargetSubmission, Realization, RealizationDiklat, Submission,
   UnlockRequest, Diklat, GradAbsorption, AbsorptionSubmission,
-  Taruna, TarunaSubmission, Notification, ActivityLog,
+  Taruna, TarunaSubmission, Notification, ActivityLog, Program, Prodi,
 } = require("../src/models");
 
 async function main() {
-  if (process.argv[2] !== "--yes") {
+  if (!process.argv.includes("--yes")) {
     console.error("BATAL: tambahkan flag --yes untuk konfirmasi penghapusan.");
-    console.error("Contoh: npm run clean:production -- --yes");
+    console.error("Contoh: npm run clean:production -- --yes [--full]");
     process.exit(1);
   }
+  const full = process.argv.includes("--full");
   const { testConnection } = require("../src/lib/database");
   const ok = await testConnection();
   if (!ok) { console.error("[fatal] Tidak bisa terhubung ke MySQL."); process.exit(1); }
@@ -49,6 +53,13 @@ async function main() {
       const n = await model.destroy({ where: {}, truncate: false, transaction: t });
       console.log(`[ok] ${label}: ${n} baris dihapus`);
     }
+    if (full) {
+      // Master dihapus TERAKHIR (setelah semua yang mereferensinya bersih)
+      const nProdi = await Prodi.destroy({ where: {}, truncate: false, transaction: t });
+      console.log(`[ok] prodis: ${nProdi} baris dihapus`);
+      const nProg = await Program.destroy({ where: {}, truncate: false, transaction: t });
+      console.log(`[ok] programs: ${nProg} baris dihapus`);
+    }
     await t.commit();
   } catch (e) {
     await t.rollback();
@@ -56,9 +67,9 @@ async function main() {
     process.exit(1);
   }
 
-  const { User, Upt, Program, Prodi } = require("../src/models");
+  const { User, Upt, Program: ProgramM, Prodi: ProdiM } = require("../src/models");
   const [users, upts, programs, prodis] = await Promise.all([
-    User.count(), Upt.count(), Program.count(), Prodi.count(),
+    User.count(), Upt.count(), ProgramM.count(), ProdiM.count(),
   ]);
   console.log(`\n=== SELESAI === dipertahankan: users=${users}, upts=${upts}, programs=${programs}, prodis=${prodis}`);
   process.exit(0);
