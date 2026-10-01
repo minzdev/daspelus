@@ -18,8 +18,9 @@ on:
 
 jobs:
   deploy:
-    # Diam sampai VPS siap: hanya jalan bila secrets sudah diisi
-    if: ${{ secrets.VPS_HOST != '' }}
+    # Diam sampai VPS siap: hanya jalan bila variable DEPLOY_ENABLED=true
+    # (Secrets tidak boleh dipakai di kondisi if, jadi pakai Variables)
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
