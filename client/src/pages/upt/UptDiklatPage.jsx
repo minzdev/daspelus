@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api, { apiError } from '../../lib/api'
 import { Modal, EmptyState, SkeletonRows, Alert, Spinner, FormField, ConfirmDialog } from '../../components/ui'
-import { IconLayers, IconPlus, IconEdit, IconTrash, IconRefresh, IconChevronDown, IconTarget, IconSearch } from '../../components/icons'
+import { IconLayers, IconPlus, IconEdit, IconTrash, IconRefresh, IconChevronDown, IconTarget, IconSearch, IconDownload, IconFileText, IconCheck } from '../../components/icons'
 import { useToast } from '../../components/Toast'
 import { fmtNum, yearOptions } from '../../utils/format'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
@@ -32,6 +32,17 @@ export default function UptDiklatPage() {
   const [formError, setFormError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Import Excel
+  const [importOpen, setImportOpen] = useState(false)
+  const [importProgId, setImportProgId] = useState('')
+  const [importFileName, setImportFileName] = useState('')
+  const [importNames, setImportNames] = useState([])
+  const [importSkippedFile, setImportSkippedFile] = useState(0)
+  const [importParsing, setImportParsing] = useState(false)
+  const [importSending, setImportSending] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -145,6 +156,119 @@ export default function UptDiklatPage() {
     }
   }
 
+  function openImport() {
+    setImportProgId('')
+    setImportFileName('')
+    setImportNames([])
+    setImportSkippedFile(0)
+    setImportError('')
+    setImportOpen(true)
+  }
+
+  function importProgramName() {
+    return progName.get(importProgId) || ''
+  }
+
+  async function downloadTemplate() {
+    if (!importProgId) {
+      setImportError('Pilih dulu program induk tujuan, template dibuat khusus untuk program itu.')
+      return
+    }
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet(`Diklat ${year}`)
+      ws.columns = [{ width: 6 }, { width: 60 }]
+      const head = ws.addRow(['NO', 'NAMA DIKLAT'])
+      head.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+      head.eachCell((c) => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }
+        c.alignment = { horizontal: 'center', vertical: 'middle' }
+      })
+      const ex = ws.addRow([1, 'Contoh: Pendidikan Karakter (hapus baris contoh ini)'])
+      ex.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF64748B' } }
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `Template_Diklat_${importProgramName().replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'Program'}_${year}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      setImportError('Gagal membuat template: ' + apiError(err))
+    }
+  }
+
+  async function handleImportFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!importProgId) {
+      setImportError('Pilih dulu program induk tujuan sebelum upload file.')
+      return
+    }
+    setImportParsing(true)
+    setImportError('')
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(await file.arrayBuffer())
+      const ws = wb.worksheets[0]
+      if (!ws) throw new Error('File kosong / sheet tidak terbaca.')
+      const names = []
+      let skipped = 0
+      ws.eachRow((row) => {
+        const raw = String(row.getCell(2).value ?? '').trim()
+        if (!raw) { skipped += 1; return }
+        const low = raw.toLowerCase()
+        // Lewati baris judul & baris contoh template
+        if (low === 'nama diklat' || low === 'no' || low.startsWith('contoh:')) { skipped += 1; return }
+        names.push(raw.length > 150 ? raw.slice(0, 150) : raw)
+      })
+      // Hilangkan duplikat di dalam file (tampilkan sekali, sisanya terhitung dilewati)
+      const seen = new Set()
+      const unique = []
+      let dup = 0
+      for (const n of names) {
+        const k = n.toLowerCase()
+        if (seen.has(k)) { dup += 1; continue }
+        seen.add(k)
+        unique.push(n)
+      }
+      if (!unique.length) {
+        setImportError('Tidak ada nama diklat valid di file. Ikuti format template (kolom NAMA DIKLAT).')
+        setImportNames([])
+        return
+      }
+      setImportNames(unique)
+      setImportSkippedFile(skipped + dup)
+      setImportFileName(file.name)
+    } catch (err) {
+      setImportError('Gagal membaca file: ' + apiError(err))
+      setImportNames([])
+    } finally {
+      setImportParsing(false)
+    }
+  }
+
+  async function doImport() {
+    if (!importProgId || !importNames.length) return
+    setImportSending(true)
+    try {
+      const { data } = await api.post('/diklats/import', { year, programIds: [importProgId], names: importNames })
+      toast.success('Import selesai', data.message, 6000)
+      setImportConfirmOpen(false)
+      setImportOpen(false)
+      await load()
+    } catch (err) {
+      toast.error('Gagal import', apiError(err))
+    } finally {
+      setImportSending(false)
+    }
+  }
+
   return (
     <div className="animate-fadeUp space-y-6">
       {/* Header */}
@@ -211,6 +335,7 @@ export default function UptDiklatPage() {
           <option value="">Semua Program</option>
           {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        <button className="btn-secondary !rounded-xl whitespace-nowrap" onClick={openImport} title="Import banyak nama diklat sekaligus dari Excel"><IconFileText className="h-4 w-4" /> Import Excel</button>
         <button className="btn-primary !rounded-xl whitespace-nowrap" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat</button>
       </div>
 
@@ -333,6 +458,74 @@ export default function UptDiklatPage() {
       </Modal>
 
       <ConfirmDialog open={!!deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Hapus Diklat?" body={`"${deleteTarget?.name}" akan dihapus dari tahun ${year}.`} confirmLabel="Ya, Hapus" cancelLabel="Batal" confirmTone="danger" loading={deleting} />
+
+      {/* Modal import Excel */}
+      <Modal open={importOpen} onClose={() => setImportOpen(false)} title={`Import Diklat Excel — ${year}`} subtitle={`${upt?.code || ''} ${upt?.name || ''}`}>
+        <div className="space-y-4">
+          {importError && <Alert type="error">{importError}</Alert>}
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+            <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Langkah 1 — Pilih program induk tujuan</p>
+            <select className="form-input !rounded-xl" value={importProgId} onChange={(e) => { setImportProgId(e.target.value); setImportNames([]); setImportFileName(''); setImportSkippedFile(0); setImportError('') }}>
+              <option value="">— Pilih program (mis. Pelatihan Teknis) —</option>
+              {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button type="button" className="btn-secondary !rounded-xl text-xs" onClick={downloadTemplate} disabled={!importProgId}>
+              <IconDownload className="h-4 w-4" /> Unduh Template ({importProgramName() || 'pilih program dulu'})
+            </button>
+            <p className="text-[11px] text-slate-500">Template hanya berisi 2 kolom: <strong>NO</strong> dan <strong>NAMA DIKLAT</strong> — khusus untuk program yang dipilih. Isi nama-nama diklat di bawah baris contoh.</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+            <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Langkah 2 — Upload file yang sudah diisi</p>
+            <label className={`flex items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-sm font-bold cursor-pointer transition-colors ${!importProgId ? 'border-slate-200 text-slate-400 bg-slate-50' : 'border-navy-300 text-navy-800 hover:bg-navy-50 bg-white'}`}>
+              <IconFileText className="h-5 w-5" />
+              {importParsing ? 'Membaca file...' : (importFileName || 'Pilih file .xlsx')}
+              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={!importProgId || importParsing} onChange={handleImportFile} />
+            </label>
+            {importFileName && (
+              <p className="text-xs text-slate-500">File: <strong className="text-slate-800">{importFileName}</strong></p>
+            )}
+          </div>
+
+          {importNames.length > 0 && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <p className="text-xs font-extrabold text-emerald-900 uppercase tracking-wide">Langkah 3 — Pratinjau ({importNames.length} nama)</p>
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-emerald-100 bg-white divide-y divide-slate-100">
+                {importNames.map((n, i) => (
+                  <div key={i} className="px-3 py-1.5 text-[13px] font-semibold text-slate-700 flex gap-2">
+                    <span className="text-slate-400 font-bold w-6 shrink-0">{i + 1}.</span><span>{n}</span>
+                  </div>
+                ))}
+              </div>
+              {importSkippedFile > 0 && <p className="text-[11px] text-slate-500 mt-1.5">{importSkippedFile} baris kosong/duplikat/contoh dilewati otomatis.</p>}
+              <div className="flex justify-end gap-2 mt-3">
+                <button type="button" className="btn-secondary !rounded-xl" onClick={() => setImportOpen(false)}>Batal</button>
+                <button
+                  type="button"
+                  className="btn-primary !rounded-xl min-w-[130px]"
+                  disabled={importSending}
+                  onClick={() => setImportConfirmOpen(true)}
+                >
+                  {importSending ? <><Spinner /> Mengirim...</> : <><IconCheck className="h-4 w-4" /> Kirim</>}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={importConfirmOpen}
+        onCancel={() => { if (!importSending) setImportConfirmOpen(false) }}
+        onConfirm={doImport}
+        title="Yakin import data ini?"
+        body={`Import ${importNames.length} nama diklat ini untuk program induk "${importProgramName()}" tahun ${year}? Nama yang sudah ada akan dilewati otomatis.`}
+        confirmLabel="Ya, Import"
+        cancelLabel="Cek Lagi"
+        confirmTone="primary"
+        loading={importSending}
+      />
     </div>
   )
 }

@@ -95,6 +95,78 @@ router.post("/", requireUpt, async (req, res) => {
   }
 });
 
+const MAX_IMPORT_NAMES = 500;
+const MAX_NAME_LEN = 150;
+
+/** POST /api/diklats/import — (UPT) import banyak nama diklat sekaligus ke 1 program */
+router.post("/import", requireUpt, async (req, res) => {
+  try {
+    const uptId = req.user.uptId;
+    if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
+    const year = Number(req.body.year) || new Date().getFullYear();
+    let programIds = req.body.programIds || req.body.programId;
+    if (!Array.isArray(programIds)) programIds = programIds ? [programIds] : [];
+    programIds = [...new Set(programIds.map(String).filter(Boolean))];
+    let names = Array.isArray(req.body.names) ? req.body.names : [];
+    names = names.map((n) => String(n || "").trim()).filter(Boolean);
+
+    if (!programIds.length) return res.status(400).json({ error: "Pilih 1 program tujuan import." });
+    if (!names.length) return res.status(400).json({ error: "Tidak ada nama diklat yang bisa diimport." });
+    if (names.length > MAX_IMPORT_NAMES) {
+      return res.status(400).json({ error: `Maksimal ${MAX_IMPORT_NAMES} nama per sekali import.` });
+    }
+    if (!year || year < 2000 || year > 2100) return res.status(400).json({ error: "Tahun tidak valid." });
+
+    const tSid = `${uptId}_${year}_00`;
+    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
+    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${year} sudah dikirim dan terkunci (${tSub.status}). Ajukan Perubahan Target PK untuk menambah diklat.` });
+    }
+
+    const progMap = new Map();
+    for (const pid of programIds) {
+      const prog = await Program.findByPk(pid);
+      if (!prog) return res.status(404).json({ error: `Program "${pid}" tidak ditemukan.` });
+      progMap.set(pid, prog.name);
+    }
+
+    const created = [];
+    const skipped = [];
+    const seenLower = new Set();
+    for (const rawName of names) {
+      const name = rawName.length > MAX_NAME_LEN ? rawName.slice(0, MAX_NAME_LEN) : rawName;
+      const lower = name.toLowerCase();
+      if (seenLower.has(lower)) {
+        skipped.push({ name, reason: "duplikat di file" });
+        continue;
+      }
+      seenLower.add(lower);
+      const dup = await Diklat.findOne({
+        where: { uptId, year, [Op.and]: [where(fn("LOWER", col("name")), lower)] },
+      });
+      if (dup) {
+        skipped.push({ name, reason: "sudah ada" });
+        continue;
+      }
+      const doc = await Diklat.create({
+        uptId, year, name, programIds,
+        targetPeserta: 0, targetLulusan: 0, isActive: true, createdBy: req.uid,
+      });
+      created.push({ id: doc.id, name });
+    }
+
+    const progNames = programIds.map((pid) => progMap.get(pid)).join(", ");
+    audit(req, "IMPORT_DIKLAT", "diklat", null, { year, program: progNames, dibuat: created.length, dilewati: skipped.length });
+    res.status(201).json({
+      message: `${created.length} nama diklat masuk ke ${progNames}${skipped.length ? `, ${skipped.length} dilewati` : ''}.`,
+      created, createdCount: created.length, skipped, skippedCount: skipped.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gagal import diklat." });
+  }
+});
+
 /** PUT /api/diklats/:id — (UPT) ubah nama / pemetaan program */
 router.put("/:id", requireUpt, async (req, res) => {
   try {
