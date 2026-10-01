@@ -18,6 +18,8 @@ on:
 
 jobs:
   deploy:
+    # Diam sampai VPS siap: hanya jalan bila secrets sudah diisi
+    if: ${{ secrets.VPS_HOST != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
