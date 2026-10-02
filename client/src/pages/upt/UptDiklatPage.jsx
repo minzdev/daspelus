@@ -171,34 +171,41 @@ export default function UptDiklatPage() {
   }
 
   async function downloadTemplate() {
-    if (!importProgId) {
-      setImportError('Pilih dulu program induk tujuan, template dibuat khusus untuk program itu.')
-      return
-    }
     try {
       const ExcelJS = (await import('exceljs')).default
       const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet(`Diklat ${year}`)
-      ws.columns = [{ width: 6 }, { width: 60 }]
+      wb.creator = 'DASPESLUS'
+      const progLabel = importProgId ? importProgramName() : (filterProg ? progName.get(filterProg) : 'Umum')
+      const ws = wb.addWorksheet(`Template Diklat ${year}`, { properties: { tabColor: { argb: '0F172A' } } })
+      ws.columns = [{ width: 8 }, { width: 60 }]
       const head = ws.addRow(['NO', 'NAMA DIKLAT'])
       head.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+      head.height = 24
       head.eachCell((c) => {
         c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }
         c.alignment = { horizontal: 'center', vertical: 'middle' }
       })
-      const ex = ws.addRow([1, 'Contoh: Pendidikan Karakter (hapus baris contoh ini)'])
-      ex.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF64748B' } }
+      const ex1 = ws.addRow([1, 'Contoh: Pendidikan Karakter (hapus baris contoh ini)'])
+      ex1.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF64748B' } }
+      ex1.height = 20
+      const ex2 = ws.addRow([2, 'Contoh: Diklat Kepelautan (hapus baris contoh ini)'])
+      ex2.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF64748B' } }
+      ex2.height = 20
+
       const buf = await wb.xlsx.writeBuffer()
       const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `Template_Diklat_${importProgramName().replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'Program'}_${year}.xlsx`
+      const cleanProg = progLabel.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'Umum'
+      a.download = `Template_Diklat_${cleanProg}_${year}.xlsx`
       document.body.appendChild(a)
       a.click()
       a.remove()
       URL.revokeObjectURL(a.href)
+      toast.success('Template diunduh', `Template Excel untuk ${progLabel} berhasil diunduh.`)
     } catch (err) {
       setImportError('Gagal membuat template: ' + apiError(err))
+      toast.error('Gagal membuat template', apiError(err))
     }
   }
 
@@ -470,6 +477,13 @@ export default function UptDiklatPage() {
         >
           {exporting ? <Spinner size="sm" /> : <IconDownload className="h-4 w-4" />} Ekspor Excel
         </button>
+        <button
+          className="btn-secondary !rounded-xl whitespace-nowrap"
+          onClick={downloadTemplate}
+          title="Unduh format template Excel untuk import diklat"
+        >
+          <IconDownload className="h-4 w-4" /> Unduh Template
+        </button>
         <button className="btn-secondary !rounded-xl whitespace-nowrap" onClick={openImport} title="Import banyak nama diklat sekaligus dari Excel"><IconFileText className="h-4 w-4" /> Import Excel</button>
         <button className="btn-primary !rounded-xl whitespace-nowrap" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat</button>
       </div>
@@ -605,8 +619,8 @@ export default function UptDiklatPage() {
               <option value="">— Pilih program (mis. Pelatihan Teknis) —</option>
               {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            <button type="button" className="btn-secondary !rounded-xl text-xs" onClick={downloadTemplate} disabled={!importProgId}>
-              <IconDownload className="h-4 w-4" /> Unduh Template ({importProgramName() || 'pilih program dulu'})
+            <button type="button" className="btn-secondary !rounded-xl text-xs" onClick={downloadTemplate}>
+              <IconDownload className="h-4 w-4" /> Unduh Template {importProgId ? `(${importProgramName()})` : 'Excel'}
             </button>
             <p className="text-[11px] text-slate-500">Template hanya berisi 2 kolom: <strong>NO</strong> dan <strong>NAMA DIKLAT</strong> — khusus untuk program yang dipilih. Isi nama-nama diklat di bawah baris contoh.</p>
           </div>
