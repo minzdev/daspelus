@@ -18,9 +18,9 @@ on:
 
 jobs:
   deploy:
-    # Diam sampai VPS siap: hanya jalan bila variable DEPLOY_ENABLED=true
-    # (Secrets tidak boleh dipakai di kondisi if, jadi pakai Variables)
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # Jalan otomatis bila DEPLOY_ENABLED=true di GitHub Variables,
+    # atau bila ditekan manual lewat tab Actions (Run workflow)
+    if: ${{ vars.DEPLOY_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH

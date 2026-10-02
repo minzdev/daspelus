@@ -43,6 +43,7 @@ export default function UptDiklatPage() {
   const [importSending, setImportSending] = useState(false)
   const [importError, setImportError] = useState('')
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -201,6 +202,132 @@ export default function UptDiklatPage() {
     }
   }
 
+  async function exportToExcel() {
+    if (!filtered.length) {
+      toast.warning('Tidak ada data', 'Tidak ada daftar diklat untuk diekspor.')
+      return
+    }
+    setExporting(true)
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      wb.creator = 'DASPESLUS'
+      const ws = wb.addWorksheet(`Diklat ${year}`, { properties: { tabColor: { argb: '0F172A' } } })
+
+      ws.columns = [
+        { key: 'no', width: 6 },
+        { key: 'name', width: 42 },
+        { key: 'programs', width: 45 },
+        { key: 'peserta', width: 16 },
+        { key: 'lulusan', width: 16 },
+        { key: 'total', width: 16 },
+      ]
+
+      // Header info
+      ws.mergeCells('A1:F1')
+      const titleCell = ws.getCell('A1')
+      titleCell.value = `DAFTAR DIKLAT TAHUN ${year}`
+      titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF0F172A' } }
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      ws.getRow(1).height = 26
+
+      ws.mergeCells('A2:F2')
+      const subCell = ws.getCell('A2')
+      subCell.value = `${upt?.code || ''} ${upt?.name || ''} — Diekspor pada ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+      subCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } }
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      ws.getRow(2).height = 18
+
+      // Table Header
+      const headerRow = ws.getRow(4)
+      headerRow.values = ['NO', 'NAMA DIKLAT', 'PROGRAM TERKAIT', 'TARGET PESERTA', 'TARGET LULUSAN', 'TOTAL TARGET']
+      headerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      headerRow.height = 24
+      headerRow.eachCell((c) => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }
+        c.alignment = { horizontal: 'center', vertical: 'middle' }
+        c.border = {
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        }
+      })
+
+      let rowNum = 5
+      let totPeserta = 0
+      let totLulusan = 0
+
+      filtered.forEach((d, idx) => {
+        const pNames = (d.programIds || []).map((pid) => progName.get(pid) || '—').join(', ')
+        const p = Number(d.targetPeserta || 0)
+        const l = Number(d.targetLulusan || 0)
+        totPeserta += p
+        totLulusan += l
+
+        const row = ws.getRow(rowNum++)
+        row.values = [idx + 1, d.name, pNames, p, l, p + l]
+        row.height = 20
+        row.eachCell((c, col) => {
+          c.font = { name: 'Calibri', size: 10, color: { argb: 'FF1E293B' } }
+          c.border = {
+            top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          }
+          if (col === 1) c.alignment = { horizontal: 'center', vertical: 'middle' }
+          else if (col === 2 || col === 3) c.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }
+          else {
+            c.alignment = { horizontal: 'right', vertical: 'middle' }
+            c.numFmt = '#,##0'
+          }
+        })
+        if (idx % 2 === 1) {
+          row.eachCell((c) => {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }
+          })
+        }
+      })
+
+      // Total Row
+      const totalRow = ws.getRow(rowNum)
+      totalRow.values = ['TOTAL', '', '', totPeserta, totLulusan, totPeserta + totLulusan]
+      totalRow.height = 22
+      totalRow.eachCell((c, col) => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+        c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } }
+        c.border = {
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        }
+        if (col <= 3) c.alignment = { horizontal: 'center', vertical: 'middle' }
+        else {
+          c.alignment = { horizontal: 'right', vertical: 'middle' }
+          c.numFmt = '#,##0'
+        }
+      })
+
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      const uptSlug = (upt?.code || 'UPT').replace(/[^\w\-]+/g, '_')
+      a.download = `Daftar_Diklat_${uptSlug}_${year}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(a.href)
+      toast.success('Ekspor berhasil', `Daftar diklat ${year} berhasil diunduh ke Excel.`)
+    } catch (err) {
+      toast.error('Gagal mengekspor', apiError(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleImportFile(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -335,6 +462,14 @@ export default function UptDiklatPage() {
           <option value="">Semua Program</option>
           {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        <button
+          className="btn-secondary !rounded-xl whitespace-nowrap"
+          onClick={exportToExcel}
+          disabled={exporting || loading || !diklats.length}
+          title="Ekspor daftar diklat tahun ini ke file Excel"
+        >
+          {exporting ? <Spinner size="sm" /> : <IconDownload className="h-4 w-4" />} Ekspor Excel
+        </button>
         <button className="btn-secondary !rounded-xl whitespace-nowrap" onClick={openImport} title="Import banyak nama diklat sekaligus dari Excel"><IconFileText className="h-4 w-4" /> Import Excel</button>
         <button className="btn-primary !rounded-xl whitespace-nowrap" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat</button>
       </div>
