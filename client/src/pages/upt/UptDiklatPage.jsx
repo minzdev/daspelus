@@ -34,6 +34,12 @@ export default function UptDiklatPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Seleksi Massal & Hapus All / Terpilih
+  const [selectedIds, setSelectedIds] = useState([])
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
+  const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false)
+
   // Import Excel (Multi-Program / Grouping Sekaligus)
   const [importOpen, setImportOpen] = useState(false)
   const [defaultFallbackProgId, setDefaultFallbackProgId] = useState('')
@@ -155,6 +161,64 @@ export default function UptDiklatPage() {
       toast.error('Gagal menghapus', apiError(err))
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const isAllSelected = useMemo(() => {
+    if (!filtered.length) return false
+    return filtered.every((d) => selectedIds.includes(d.id))
+  }, [filtered, selectedIds])
+
+  const isSomeSelected = useMemo(() => {
+    return selectedIds.length > 0 && !isAllSelected
+  }, [selectedIds, isAllSelected])
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  function toggleSelectAll() {
+    if (isAllSelected) {
+      const filteredIdSet = new Set(filtered.map((d) => d.id))
+      setSelectedIds((prev) => prev.filter((id) => !filteredIdSet.has(id)))
+    } else {
+      const set = new Set([...selectedIds, ...filtered.map((d) => d.id)])
+      setSelectedIds([...set])
+    }
+  }
+
+  function clearSelection() {
+    setSelectedIds([])
+  }
+
+  async function handleBulkDelete() {
+    if (!selectedIds.length) return
+    setBulkDeleting(true)
+    try {
+      const { data } = await api.post('/diklats/bulk-delete', { ids: selectedIds, year })
+      toast.success('Berhasil dihapus', data.message || `${selectedIds.length} diklat berhasil dihapus.`)
+      setSelectedIds([])
+      setBulkDeleteConfirmOpen(false)
+      await load()
+    } catch (err) {
+      toast.error('Gagal menghapus diklat terpilih', apiError(err))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  async function handleDeleteAll() {
+    setBulkDeleting(true)
+    try {
+      const { data } = await api.post('/diklats/delete-all', { year })
+      toast.success('Berhasil dihapus', data.message || `Seluruh diklat tahun ${year} berhasil dihapus.`)
+      setSelectedIds([])
+      setDeleteAllConfirmOpen(false)
+      await load()
+    } catch (err) {
+      toast.error('Gagal menghapus seluruh diklat', apiError(err))
+    } finally {
+      setBulkDeleting(false)
     }
   }
 
@@ -725,6 +789,16 @@ export default function UptDiklatPage() {
           <IconDownload className="h-4 w-4" /> Unduh Template
         </button>
         <button className="btn-secondary !rounded-xl whitespace-nowrap" onClick={openImport} title="Import banyak nama diklat sekaligus dari Excel"><IconFileText className="h-4 w-4" /> Import Excel</button>
+        {diklats.length > 0 && (
+          <button
+            type="button"
+            className="btn-secondary !rounded-xl !text-red-600 hover:!bg-red-50 !border-red-200 whitespace-nowrap"
+            onClick={() => setDeleteAllConfirmOpen(true)}
+            title="Hapus seluruh diklat tahun ini"
+          >
+            <IconTrash className="h-4 w-4" /> Hapus Semua
+          </button>
+        )}
         <button className="btn-primary !rounded-xl whitespace-nowrap" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat</button>
       </div>
 
@@ -747,14 +821,59 @@ export default function UptDiklatPage() {
         </div>
       </div>
 
+      {/* Floating Banner Aksi Massal (Tandai & Hapus Terpilih) */}
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-red-50/90 border border-red-200 rounded-2xl shadow-sm transition-all">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-red-600 text-white font-black text-xs shadow-xs">
+              {selectedIds.length}
+            </span>
+            <div>
+              <p className="text-xs font-black text-red-950">
+                {selectedIds.length} diklat ditandai
+              </p>
+              <p className="text-[11px] text-red-700">
+                Siap dihapus sekaligus dari daftar tahun {year}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary btn-sm !rounded-xl !text-slate-600 hover:!text-slate-900 bg-white"
+              onClick={clearSelection}
+            >
+              Batalkan Pilihan
+            </button>
+            <button
+              type="button"
+              className="btn-danger btn-sm !rounded-xl flex items-center gap-1.5 shadow-sm font-bold bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => setBulkDeleteConfirmOpen(true)}
+            >
+              <IconTrash className="h-3.5 w-3.5" /> Hapus {selectedIds.length} Diklat Terpilih
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tabel diklat */}
       <div className="card rounded-2xl border border-slate-200/60 overflow-hidden bg-white">
-        <div className="px-5 py-4 border-b border-slate-200/60 flex items-center gap-2.5 bg-gradient-to-b from-white to-slate-50/40">
-          <span className="h-8 w-8 rounded-xl bg-navy-900 text-white flex items-center justify-center"><IconLayers className="h-4 w-4" /></span>
-          <div>
-            <h3 className="text-sm font-extrabold text-slate-900">Daftar Diklat {year} ({filtered.length})</h3>
-            <p className="text-xs text-slate-500">Setiap diklat dapat masuk ke lebih dari satu program</p>
+        <div className="px-5 py-4 border-b border-slate-200/60 flex items-center justify-between gap-2.5 bg-gradient-to-b from-white to-slate-50/40 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <span className="h-8 w-8 rounded-xl bg-navy-900 text-white flex items-center justify-center"><IconLayers className="h-4 w-4" /></span>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900">Daftar Diklat {year} ({filtered.length})</h3>
+              <p className="text-xs text-slate-500">Tandai satu atau beberapa diklat untuk dihapus massal</p>
+            </div>
           </div>
+          {filtered.length > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-500 font-medium">Terpilih: <strong>{selectedIds.length}</strong> / {filtered.length}</span>
+              {selectedIds.length > 0 && (
+                <button type="button" className="text-navy-700 font-bold hover:underline" onClick={clearSelection}>Reset</button>
+              )}
+            </div>
+          )}
         </div>
         {loading ? (
           <div className="p-4"><SkeletonRows rows={5} /></div>
@@ -770,33 +889,55 @@ export default function UptDiklatPage() {
             <table className="w-full text-sm" style={{ minWidth: 720 }}>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/60">
-                  <th className="text-left px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Nama Diklat</th>
+                  <th className="w-12 px-4 py-3.5 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-navy-900 focus:ring-navy-600 cursor-pointer accent-navy-900"
+                      checked={isAllSelected}
+                      ref={(el) => { if (el) el.indeterminate = isSomeSelected }}
+                      onChange={toggleSelectAll}
+                      title="Pilih semua baris yang tampil"
+                    />
+                  </th>
+                  <th className="text-left px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Nama Diklat</th>
                   <th className="text-left px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Masuk Program</th>
                   <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target</th>
                   <th className="text-right px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50/60">
-                    <td className="px-5 py-4">
-                      <p className="font-bold text-slate-900">{d.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{d.targetPeserta + d.targetLulusan > 0 ? `${fmtNum(d.targetPeserta)} peserta · ${fmtNum(d.targetLulusan)} lulusan` : 'Belum ada angka — isi di Input Target PK'}</p>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="flex flex-wrap gap-1.5 max-w-[420px]">
-                        {(d.programIds || []).map((pid) => (
-                          <span key={pid} className="inline-flex items-center rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200 px-2.5 py-1 text-xs font-bold">{progName.get(pid) || 'Program terhapus'}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 text-right font-bold tabular-nums">{fmtNum((d.targetPeserta || 0) + (d.targetLulusan || 0))}</td>
-                    <td className="px-5 py-4 text-right whitespace-nowrap">
-                      <button className="btn-secondary btn-sm !rounded-xl mr-1.5" onClick={() => openEdit(d)}><IconEdit className="h-3.5 w-3.5" /> Edit</button>
-                      <button className="btn-secondary btn-sm !rounded-xl !text-red-600 hover:!bg-red-50" onClick={() => setDeleteTarget(d)}><IconTrash className="h-3.5 w-3.5" /></button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((d) => {
+                  const isChecked = selectedIds.includes(d.id)
+                  return (
+                    <tr key={d.id} className={clsx('transition-colors', isChecked ? 'bg-sky-50/80 hover:bg-sky-50' : 'hover:bg-slate-50/60')}>
+                      <td className="w-12 px-4 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-navy-900 focus:ring-navy-600 cursor-pointer accent-navy-900"
+                          checked={isChecked}
+                          onChange={() => toggleSelect(d.id)}
+                          title="Tandai diklat ini"
+                        />
+                      </td>
+                      <td className="px-4 py-4">
+                        <p className="font-bold text-slate-900">{d.name}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{d.targetPeserta + d.targetLulusan > 0 ? `${fmtNum(d.targetPeserta)} peserta · ${fmtNum(d.targetLulusan)} lulusan` : 'Belum ada angka — isi di Input Target PK'}</p>
+                      </td>
+                      <td className="px-3 py-4">
+                        <div className="flex flex-wrap gap-1.5 max-w-[420px]">
+                          {(d.programIds || []).map((pid) => (
+                            <span key={pid} className="inline-flex items-center rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200 px-2.5 py-1 text-xs font-bold">{progName.get(pid) || 'Program terhapus'}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-3 py-4 text-right font-bold tabular-nums">{fmtNum((d.targetPeserta || 0) + (d.targetLulusan || 0))}</td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <button className="btn-secondary btn-sm !rounded-xl mr-1.5" onClick={() => openEdit(d)}><IconEdit className="h-3.5 w-3.5" /> Edit</button>
+                        <button className="btn-secondary btn-sm !rounded-xl !text-red-600 hover:!bg-red-50" onClick={() => setDeleteTarget(d)}><IconTrash className="h-3.5 w-3.5" /></button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1024,6 +1165,32 @@ export default function UptDiklatPage() {
         cancelLabel="Periksa Lagi"
         confirmTone="primary"
         loading={importSending}
+      />
+
+      {/* Konfirmasi Hapus Terpilih */}
+      <ConfirmDialog
+        open={bulkDeleteConfirmOpen}
+        onCancel={() => { if (!bulkDeleting) setBulkDeleteConfirmOpen(false) }}
+        onConfirm={handleBulkDelete}
+        title={`Hapus ${selectedIds.length} Diklat Terpilih?`}
+        body={`Sebanyak ${selectedIds.length} diklat yang Anda tandai akan dihapus permanen dari tahun ${year}. Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel={`Ya, Hapus ${selectedIds.length} Diklat`}
+        cancelLabel="Batal"
+        confirmTone="danger"
+        loading={bulkDeleting}
+      />
+
+      {/* Konfirmasi Hapus Semua */}
+      <ConfirmDialog
+        open={deleteAllConfirmOpen}
+        onCancel={() => { if (!bulkDeleting) setDeleteAllConfirmOpen(false) }}
+        onConfirm={handleDeleteAll}
+        title={`Hapus Seluruh Diklat Tahun ${year}?`}
+        body={`PERINGATAN: Seluruh nama diklat (${diklats.length} diklat) milik UPT Anda pada tahun ${year} akan dihapus bersih. Pastikan Anda benar-benar yakin sebelum melanjutkan.`}
+        confirmLabel="Ya, Hapus Seluruh Diklat"
+        cancelLabel="Batal"
+        confirmTone="danger"
+        loading={bulkDeleting}
       />
     </div>
   )
