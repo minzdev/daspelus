@@ -31,6 +31,19 @@ async function findRealDiklatSafe(where) {
   }
 }
 
+/** Ambil master diklat dengan aman */
+async function findDiklatSafe(where) {
+  try {
+    return await Diklat.findAll({ where });
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      console.warn('[reports] tabel diklats belum ada. Lanjut tanpa master diklat.');
+      return [];
+    }
+    throw err;
+  }
+}
+
 function buildFlatPrograms(allProgs) {
   const parents = allProgs
     .filter((p) => !p.parentId)
@@ -405,12 +418,14 @@ router.get("/program-detail", async (req, res) => {
   const matraQuery = req.query.matra ? String(req.query.matra).toLowerCase().trim() : null;
   const uptIdQuery = req.query.uptId ? String(req.query.uptId).trim() : null;
   try {
-    const [realDocs, targetDocs, uptDocs, progDocs, subDocs] = await Promise.all([
+    const [realDocs, targetDocs, uptDocs, progDocs, subDocs, diklatDocs, realDiklatDocs] = await Promise.all([
       Realization.findAll({ where: { year } }),
       Target.findAll({ where: { year } }),
       Upt.findAll(),
       Program.findAll(),
       Submission.findAll({ where: { year } }),
+      findDiklatSafe({ year }),
+      findRealDiklatSafe({ year }),
     ]);
     const approvedByUptMonth = new Map();
     for (const s of subDocs) {
@@ -436,15 +451,45 @@ router.get("/program-detail", async (req, res) => {
       activeUpts = activeUpts.filter((u) => String(u.id) === uptIdQuery);
     }
 
-    const uptMap = new Map(activeUpts.map((u) => [u.id, u.toJSON()]));
-    const allProgs = progDocs.map((d) => d.toJSON());
+    const activeUptIds = new Set(activeUpts.map((u) => String(u.id)));
+    const uptMap = new Map(activeUpts.map((u) => [String(u.id), u.toJSON ? u.toJSON() : u]));
+    const allProgs = progDocs.map((d) => d.toJSON ? d.toJSON() : d);
     const flat = buildFlatPrograms(allProgs);
-    // Tampilkan semua program (induk + turunan) urut sesuai Master Program: induk dulu baru turunannya
     const turunanList = flat;
+
+    // Filter dan petakan diklat untuk UPT aktif
+    const parsedDiklats = (diklatDocs || []).map((d) => {
+      const j = d.toJSON ? d.toJSON() : d;
+      let pids = [];
+      if (Array.isArray(j.programIds)) {
+        pids = j.programIds.map(String);
+      } else if (typeof j.programIds === 'string') {
+        try { pids = JSON.parse(j.programIds || '[]').map(String); } catch (_) { pids = []; }
+      }
+      return { ...j, programIds: pids };
+    }).filter((d) => activeUptIds.has(String(d.uptId)) && d.isActive !== false);
+
+    // Map realisasi diklat: `${diklatId}|${programId}|${month}` -> { pesertaL, pesertaP, lulusanL, lulusanP }
+    const realDiklatMap = new Map();
+    for (const rdDoc of (realDiklatDocs || [])) {
+      const rd = rdDoc.toJSON ? rdDoc.toJSON() : rdDoc;
+      if (!activeUptIds.has(String(rd.uptId))) continue;
+      const approvedSet = approvedByUptMonth.get(rd.uptId);
+      if (!approvedSet || !approvedSet.has(Number(rd.month))) continue;
+      const key = `${rd.diklatId}|${rd.programId}|${rd.month}`;
+      const prev = realDiklatMap.get(key) || { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0 };
+      realDiklatMap.set(key, {
+        pesertaL: prev.pesertaL + (Number(rd.pesertaL) || 0),
+        pesertaP: prev.pesertaP + (Number(rd.pesertaP) || 0),
+        lulusanL: prev.lulusanL + (Number(rd.lulusanL) || 0),
+        lulusanP: prev.lulusanP + (Number(rd.lulusanP) || 0),
+      });
+    }
+
     // Build real/target maps per UPT per program
     const realByUptProgMonth = new Map(); // uptId -> programId -> month -> {pesertaL, ...}
     for (const rDoc of realDocs) {
-      const r = rDoc.toJSON();
+      const r = rDoc.toJSON ? rDoc.toJSON() : rDoc;
       const approvedSet = approvedByUptMonth.get(r.uptId);
       if (!approvedSet || !approvedSet.has(Number(r.month))) continue;
       if (month && Number(r.month) !== month) continue;
@@ -459,7 +504,7 @@ router.get("/program-detail", async (req, res) => {
     }
     const targetByUptProgMonth = new Map();
     for (const tDoc of targetDocs) {
-      const t = tDoc.toJSON();
+      const t = tDoc.toJSON ? tDoc.toJSON() : tDoc;
       const mNum = Number(t.month);
       if (mNum === 0) {
         const approvedSet = approvedByUptMonth.get(t.uptId);
@@ -474,19 +519,55 @@ router.get("/program-detail", async (req, res) => {
       const prev = targetByUptProgMonth.get(key) || { tp: 0, tl: 0 };
       targetByUptProgMonth.set(key, { tp: prev.tp + (Number(t.targetPeserta) || 0), tl: prev.tl + (Number(t.targetLulusan) || 0) });
     }
+
     // Aggregate per program across all UPTs and matra
     const progAgg = [];
     for (const prog of turunanList) {
-      const matraAgg = { darat: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 }, laut: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 }, udara: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 }, aparatur: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 } };
+      const matraAgg = {
+        darat: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 },
+        laut: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 },
+        udara: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 },
+        aparatur: { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0, targetPeserta: 0, targetLulusan: 0, uptCount: 0 },
+      };
+      const monthly = {};
+      for (let m = 1; m <= 12; m++) {
+        monthly[m] = {
+          pesertaL: 0, pesertaP: 0, totalPeserta: 0,
+          lulusanL: 0, lulusanP: 0, totalLulusan: 0,
+          targetPeserta: 0, targetLulusan: 0,
+        };
+      }
+
       let totalPesertaL = 0, totalPesertaP = 0, totalLulusanL = 0, totalLulusanP = 0, totalTargetPeserta = 0, totalTargetLulusan = 0;
       const uptSet = new Set();
       for (const upt of activeUpts) {
         const uptId = upt.id;
         const matraKey = (upt.matra || '').toLowerCase() === 'aparatur' || (upt.uptType || '').toLowerCase() === 'aparatur' ? 'aparatur' : (['darat','laut','udara'].includes((upt.matra||'').toLowerCase()) ? (upt.matra||'').toLowerCase() : null);
         if (!matraKey) continue;
-        // Realisasi: sum across months (or specific month)
+
         let rPesertaL = 0, rPesertaP = 0, rLulusanL = 0, rLulusanP = 0;
         let tPeserta = 0, tLulusan = 0;
+
+        // Hitung 12 bulan
+        for (let m = 1; m <= 12; m++) {
+          const rKey = `${uptId}|${prog.id}|${m}`;
+          const r = realByUptProgMonth.get(rKey);
+          if (r) {
+            monthly[m].pesertaL += r.pesertaL;
+            monthly[m].pesertaP += r.pesertaP;
+            monthly[m].totalPeserta += (r.pesertaL + r.pesertaP);
+            monthly[m].lulusanL += r.lulusanL;
+            monthly[m].lulusanP += r.lulusanP;
+            monthly[m].totalLulusan += (r.lulusanL + r.lulusanP);
+          }
+          const tKey = `${uptId}|${prog.id}|${m}`;
+          const t = targetByUptProgMonth.get(tKey);
+          if (t) {
+            monthly[m].targetPeserta += t.tp;
+            monthly[m].targetLulusan += t.tl;
+          }
+        }
+
         if (month) {
           const rKey = `${uptId}|${prog.id}|${month}`;
           const r = realByUptProgMonth.get(rKey);
@@ -496,7 +577,7 @@ router.get("/program-detail", async (req, res) => {
           const t = targetByUptProgMonth.get(tKey) || targetByUptProgMonth.get(tKeyYearly);
           if (t) { tPeserta = t.tp; tLulusan = t.tl; }
         } else {
-          // All months: sum
+          // All months sum
           for (let m = 1; m <= 12; m++) {
             const rKey = `${uptId}|${prog.id}|${m}`;
             const r = realByUptProgMonth.get(rKey);
@@ -508,6 +589,7 @@ router.get("/program-detail", async (req, res) => {
           const tYearly = targetByUptProgMonth.get(`${uptId}|${prog.id}|0`);
           if (tYearly) { tPeserta += tYearly.tp; tLulusan += tYearly.tl; }
         }
+
         const hasData = rPesertaL + rPesertaP + rLulusanL + rLulusanP + tPeserta + tLulusan > 0;
         if (hasData) uptSet.add(uptId);
         totalPesertaL += rPesertaL; totalPesertaP += rPesertaP; totalLulusanL += rLulusanL; totalLulusanP += rLulusanP;
@@ -519,7 +601,54 @@ router.get("/program-detail", async (req, res) => {
           if (hasData) matraAgg[matraKey].uptCount = (matraAgg[matraKey].uptCount || 0) + 1;
         }
       }
-      // Count UPTs per matra already done via uptCount increment
+
+      // Kumpulkan detail diklat untuk program ini (hanya jika program turunan)
+      const progDiklats = [];
+      if (!prog.isParent) {
+        for (const d of parsedDiklats) {
+          if (!d.programIds.includes(String(prog.id))) continue;
+          const u = uptMap.get(String(d.uptId));
+          const dMonthly = {};
+          let dTotPesertaL = 0, dTotPesertaP = 0, dTotLulusanL = 0, dTotLulusanP = 0;
+          for (let m = 1; m <= 12; m++) {
+            const rk = `${d.id}|${prog.id}|${m}`;
+            const r = realDiklatMap.get(rk) || { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0 };
+            dMonthly[m] = {
+              pesertaL: r.pesertaL,
+              pesertaP: r.pesertaP,
+              totalPeserta: r.pesertaL + r.pesertaP,
+              lulusanL: r.lulusanL,
+              lulusanP: r.lulusanP,
+              totalLulusan: r.lulusanL + r.lulusanP,
+            };
+            if (!month || month === m) {
+              dTotPesertaL += r.pesertaL;
+              dTotPesertaP += r.pesertaP;
+              dTotLulusanL += r.lulusanL;
+              dTotLulusanP += r.lulusanP;
+            }
+          }
+          progDiklats.push({
+            id: d.id,
+            name: d.name,
+            uptId: d.uptId,
+            uptCode: u?.code || '',
+            uptName: u?.name || '',
+            matra: u?.matra || '',
+            targetPeserta: Number(d.targetPeserta) || 0,
+            targetLulusan: Number(d.targetLulusan) || 0,
+            totalPesertaL: dTotPesertaL,
+            totalPesertaP: dTotPesertaP,
+            totalPeserta: dTotPesertaL + dTotPesertaP,
+            totalLulusanL: dTotLulusanL,
+            totalLulusanP: dTotLulusanP,
+            totalLulusan: dTotLulusanL + dTotLulusanP,
+            monthly: dMonthly,
+          });
+        }
+        progDiklats.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
       progAgg.push({
         programId: prog.id,
         programName: prog.name,
@@ -533,11 +662,12 @@ router.get("/program-detail", async (req, res) => {
         totalTargetPeserta, totalTargetLulusan,
         uptCount: uptSet.size,
         matra: matraAgg,
+        monthly,
+        diklats: progDiklats,
       });
     }
-    // Samakan urutan dengan Master Program: flat order (induk dulu, lalu turunan per induk) - jangan sort ulang by parentName
-    // progAgg sudah dalam urutan flat (induk -> turunan), biarkan
-    // Untuk induk, total adalah sum turunannya (auto-sum) agar sesuai tampilan Master Program
+
+    // Auto-sum untuk program induk dari program-program turunannya
     const progMapAgg = new Map(progAgg.map(p => [p.programId, p]));
     for (const prog of progAgg) {
       const flatEntry = flat.find(f => f.id === prog.programId);
@@ -546,35 +676,61 @@ router.get("/program-detail", async (req, res) => {
       if (!children.length) continue;
       let sPesertaL=0,sPesertaP=0,sLulusanL=0,sLulusanP=0,sTargetPeserta=0,sTargetLulusan=0;
       const mAgg = { darat: { pesertaL:0,pesertaP:0,lulusanL:0,lulusanP:0,targetPeserta:0,targetLulusan:0,uptCount:0 }, laut: { pesertaL:0,pesertaP:0,lulusanL:0,lulusanP:0,targetPeserta:0,targetLulusan:0,uptCount:0 }, udara: { pesertaL:0,pesertaP:0,lulusanL:0,lulusanP:0,targetPeserta:0,targetLulusan:0,uptCount:0 }, aparatur: { pesertaL:0,pesertaP:0,lulusanL:0,lulusanP:0,targetPeserta:0,targetLulusan:0,uptCount:0 } };
+      const parentMonthly = {};
+      for (let m = 1; m <= 12; m++) {
+        parentMonthly[m] = {
+          pesertaL: 0, pesertaP: 0, totalPeserta: 0,
+          lulusanL: 0, lulusanP: 0, totalLulusan: 0,
+          targetPeserta: 0, targetLulusan: 0,
+        };
+      }
+      let totalDiklats = 0;
+
       for (const child of children) {
         const cAgg = progMapAgg.get(child.id);
         if (!cAgg) continue;
         sPesertaL += cAgg.totalPesertaL; sPesertaP += cAgg.totalPesertaP;
         sLulusanL += cAgg.totalLulusanL; sLulusanP += cAgg.totalLulusanP;
         sTargetPeserta += cAgg.totalTargetPeserta; sTargetLulusan += cAgg.totalTargetLulusan;
+        totalDiklats += (cAgg.diklats || []).length;
         for (const mk of ['darat','laut','udara','aparatur']) {
           mAgg[mk].pesertaL += cAgg.matra[mk].pesertaL; mAgg[mk].pesertaP += cAgg.matra[mk].pesertaP;
           mAgg[mk].lulusanL += cAgg.matra[mk].lulusanL; mAgg[mk].lulusanP += cAgg.matra[mk].lulusanP;
           mAgg[mk].targetPeserta += cAgg.matra[mk].targetPeserta; mAgg[mk].targetLulusan += cAgg.matra[mk].targetLulusan;
           mAgg[mk].uptCount = Math.max(mAgg[mk].uptCount, cAgg.matra[mk].uptCount);
         }
+        for (let m = 1; m <= 12; m++) {
+          const cm = cAgg.monthly?.[m];
+          if (cm) {
+            parentMonthly[m].pesertaL += cm.pesertaL;
+            parentMonthly[m].pesertaP += cm.pesertaP;
+            parentMonthly[m].totalPeserta += cm.totalPeserta;
+            parentMonthly[m].lulusanL += cm.lulusanL;
+            parentMonthly[m].lulusanP += cm.lulusanP;
+            parentMonthly[m].totalLulusan += cm.totalLulusan;
+            parentMonthly[m].targetPeserta += cm.targetPeserta;
+            parentMonthly[m].targetLulusan += cm.targetLulusan;
+          }
+        }
       }
       prog.totalPesertaL = sPesertaL; prog.totalPesertaP = sPesertaP; prog.totalPeserta = sPesertaL+sPesertaP;
       prog.totalLulusanL = sLulusanL; prog.totalLulusanP = sLulusanP; prog.totalLulusan = sLulusanL+sLulusanP;
       prog.totalTargetPeserta = sTargetPeserta; prog.totalTargetLulusan = sTargetLulusan;
       prog.matra = mAgg;
+      prog.monthly = parentMonthly;
       prog.uptCount = Math.max(...children.map(c=>progMapAgg.get(c.id)?.uptCount||0),0);
+      prog.diklatCount = totalDiklats;
     }
     const summary = {
       totalPrograms: progAgg.length,
-      totalPeserta: progAgg.reduce((s,p)=>s+p.totalPeserta,0),
-      totalLulusan: progAgg.reduce((s,p)=>s+p.totalLulusan,0),
-      totalTargetPeserta: progAgg.reduce((s,p)=>s+p.totalTargetPeserta,0),
-      totalTargetLulusan: progAgg.reduce((s,p)=>s+p.totalTargetLulusan,0),
-      totalPesertaL: progAgg.reduce((s,p)=>s+p.totalPesertaL,0),
-      totalPesertaP: progAgg.reduce((s,p)=>s+p.totalPesertaP,0),
-      totalLulusanL: progAgg.reduce((s,p)=>s+p.totalLulusanL,0),
-      totalLulusanP: progAgg.reduce((s,p)=>s+p.totalLulusanP,0),
+      totalPeserta: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalPeserta,0),
+      totalLulusan: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalLulusan,0),
+      totalTargetPeserta: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalTargetPeserta,0),
+      totalTargetLulusan: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalTargetLulusan,0),
+      totalPesertaL: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalPesertaL,0),
+      totalPesertaP: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalPesertaP,0),
+      totalLulusanL: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalLulusanL,0),
+      totalLulusanP: progAgg.filter(p => !p.isParent).reduce((s,p)=>s+p.totalLulusanP,0),
     };
     const selectedUptObj = uptIdQuery && uptIdQuery !== "semua" ? uptDocs.find((u) => String(u.id) === uptIdQuery) : null;
     res.json({
