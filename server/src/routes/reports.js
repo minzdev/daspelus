@@ -188,10 +188,13 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
     const byDiklat = diklatRealByProg.get(pid);
     if (!byDiklat.has(did)) {
       const master = diklatById.get(did);
+      const tbp = (master?.targetByProgram && typeof master.targetByProgram === 'object') ? master.targetByProgram[pid] : null;
+      const targetPeserta = (tbp && tbp.targetPeserta !== undefined) ? Number(tbp.targetPeserta) : (Number(master?.targetPeserta) || 0);
+      const targetLulusan = (tbp && tbp.targetLulusan !== undefined) ? Number(tbp.targetLulusan) : (Number(master?.targetLulusan) || 0);
       byDiklat.set(did, {
         diklatId: r.diklatId, name: master?.name || "Diklat",
-        targetPeserta: Number(master?.targetPeserta) || 0,
-        targetLulusan: Number(master?.targetLulusan) || 0,
+        targetPeserta,
+        targetLulusan,
         pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0,
         byMonth: {},
       });
@@ -213,10 +216,13 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
       const key = String(pid);
       const arr = diklatDetailsByProg.get(key) || [];
       if (!arr.some((e) => String(e.diklatId) === String(d.id))) {
+        const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[key] : null;
+        const targetPeserta = (tbp && tbp.targetPeserta !== undefined) ? Number(tbp.targetPeserta) : (Number(d.targetPeserta) || 0);
+        const targetLulusan = (tbp && tbp.targetLulusan !== undefined) ? Number(tbp.targetLulusan) : (Number(d.targetLulusan) || 0);
         arr.push({
           diklatId: d.id, name: d.name,
-          targetPeserta: Number(d.targetPeserta) || 0,
-          targetLulusan: Number(d.targetLulusan) || 0,
+          targetPeserta,
+          targetLulusan,
           pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0,
           byMonth: {},
         });

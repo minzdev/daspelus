@@ -45,6 +45,13 @@ const Diklat = sequelize.define(
       defaultValue: 0,
       field: 'target_lulusan',
     },
+    targetByProgram: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: {},
+      field: 'target_by_program',
+      comment: 'Peta target per program: { [programId]: { targetPeserta: number, targetLulusan: number } }',
+    },
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,

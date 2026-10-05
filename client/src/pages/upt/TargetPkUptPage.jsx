@@ -138,14 +138,22 @@ export default function TargetPkUptPage() {
   )
   const isLocked = submission && ['pending_pimpinan', 'pending_bpsdmp', 'approved'].includes(submission.status)
 
-  // Nilai form: diklat
-  function diklatVal(id, field) {
-    const f = diklatForm[id]
+  // Nilai form: diklat terikat per kombinasi (programId, diklatId)
+  function diklatVal(pid, dId, field) {
+    const key = `${pid}_${dId}`
+    const f = diklatForm[key]
     if (f && f[field] !== undefined && String(f[field]).trim() !== '') return String(f[field]).trim()
-    const saved = diklatById.get(id)
-    if (saved) return String(field === 'tp' ? saved.targetPeserta || 0 : saved.targetLulusan || 0)
+    const saved = diklatById.get(dId)
+    if (saved) {
+      const tbp = (saved.targetByProgram && typeof saved.targetByProgram === 'object') ? saved.targetByProgram[pid] : null
+      if (tbp && tbp[field === 'tp' ? 'targetPeserta' : 'targetLulusan'] !== undefined) {
+        return String(tbp[field === 'tp' ? 'targetPeserta' : 'targetLulusan'] ?? 0)
+      }
+      return String(field === 'tp' ? saved.targetPeserta || 0 : saved.targetLulusan || 0)
+    }
     return '0'
   }
+
   // Nilai program: INDUK = auto-sum turunan; TURUNAN ber-diklat = auto-sum diklat; TURUNAN tanpa diklat = input langsung
   function progVal(pid, field, _seen = new Set()) {
     if (_seen.has(pid)) return '0'
@@ -164,9 +172,9 @@ export default function TargetPkUptPage() {
     const saved = itemsByPid.get(pid)
     const hasDiklat = (diklatByProgram.get(pid) || []).length > 0
     if (hasDiklat) {
-      // total turunan = jumlah rincian diklat (live dari form)
+      // total turunan = jumlah rincian diklat spesifik untuk program ini (live dari form)
       const list = diklatByProgram.get(pid) || []
-      return String(list.reduce((s, d) => s + (Number(diklatVal(d.id, field)) || 0), 0))
+      return String(list.reduce((s, d) => s + (Number(diklatVal(pid, d.id, field)) || 0), 0))
     }
     if (saved) return String(field === 'tp' ? saved.targetPeserta || 0 : saved.targetLulusan || 0)
     return '0'
@@ -193,24 +201,39 @@ export default function TargetPkUptPage() {
     if (e) e.preventDefault()
     setFormError('')
     const diklatTargets = []
-    for (const d of diklats) {
-      const f = diklatForm[d.id]
-      if (!f) continue
-      const tps = f.tp !== undefined ? String(f.tp ?? '').trim() : ''
-      const tls = f.tl !== undefined ? String(f.tl ?? '').trim() : ''
-      if (tps === '' && tls === '') continue
-      const tp = tps !== '' ? parseNum(tps) : Number(d.targetPeserta) || 0
-      const tl = tls !== '' ? parseNum(tls) : Number(d.targetLulusan) || 0
-      if (!Number.isFinite(tp) || !Number.isFinite(tl) || tp < 0 || tl < 0) {
-        setFormError(`Diklat "${d.name}" harus berupa angka ≥ 0.`)
-        return
+
+    // Kumpulkan target per diklat per program
+    for (const p of leafPrograms) {
+      const rincian = diklatByProgram.get(p.id) || []
+      for (const d of rincian) {
+        const vTp = diklatVal(p.id, d.id, 'tp')
+        const vTl = diklatVal(p.id, d.id, 'tl')
+        const tp = parseNum(vTp) || 0
+        const tl = parseNum(vTl) || 0
+        if (!Number.isFinite(tp) || !Number.isFinite(tl) || tp < 0 || tl < 0) {
+          setFormError(`Diklat "${d.name}" di "${p.name}" harus berupa angka ≥ 0.`)
+          return
+        }
+        if (tl > tp) {
+          setFormError(`Diklat "${d.name}" di "${p.name}": Lulusan (${tl}) tidak boleh lebih besar dari Peserta (${tp}).`)
+          return
+        }
+        diklatTargets.push({ diklatId: d.id, programId: p.id, targetPeserta: tp, targetLulusan: tl })
       }
-      if (tl > tp) {
-        setFormError(`Diklat "${d.name}": Lulusan (${tl}) tidak boleh lebih besar dari Peserta (${tp}).`)
-        return
-      }
-      diklatTargets.push({ diklatId: d.id, targetPeserta: tp, targetLulusan: tl })
     }
+    for (const g of parentGroups) {
+      if (g.parentId && g.children.length === 0) {
+        const rincian = diklatByProgram.get(g.parentId) || []
+        for (const d of rincian) {
+          const vTp = diklatVal(g.parentId, d.id, 'tp')
+          const vTl = diklatVal(g.parentId, d.id, 'tl')
+          const tp = parseNum(vTp) || 0
+          const tl = parseNum(vTl) || 0
+          diklatTargets.push({ diklatId: d.id, programId: g.parentId, targetPeserta: tp, targetLulusan: tl })
+        }
+      }
+    }
+
     const items = []
     for (const p of leafPrograms) {
       const hasDiklat = (diklatByProgram.get(p.id) || []).length > 0
@@ -278,24 +301,25 @@ export default function TargetPkUptPage() {
     }
   }
 
-  function DiklatInputList({ rincian, contextName }) {
+  function DiklatInputList({ rincian, contextName, programId }) {
     return (
       <div className="mt-3 space-y-2 rounded-xl bg-slate-50/70 border border-slate-100 p-3">
         <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Rincian diklat ({rincian.length}) di bawah {contextName}</p>
         {rincian.map((d) => {
-          const vTp = diklatForm[d.id]?.tp ?? String(d.targetPeserta || 0)
-          const vTl = diklatForm[d.id]?.tl ?? String(d.targetLulusan || 0)
+          const fKey = `${programId}_${d.id}`
+          const vTp = diklatVal(programId, d.id, 'tp')
+          const vTl = diklatVal(programId, d.id, 'tl')
           const invalid = (Number(vTl) || 0) > (Number(vTp) || 0)
           return (
             <div key={d.id} className={`grid grid-cols-1 sm:grid-cols-[1fr_130px_130px] gap-2 items-center rounded-xl border p-2.5 ${invalid ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
               <p className="text-[13px] font-semibold text-slate-700">• {d.name}</p>
               <FormField label="Peserta" className="!mb-0">
                 <input type="text" inputMode="numeric" autoComplete="off" className="form-input !py-2 tabular-nums text-center font-bold !rounded-xl" placeholder="0"
-                  value={vTp} onChange={(e) => setDiklatForm((f) => ({ ...f, [d.id]: { ...f[d.id], tp: e.target.value.replace(/[^0-9]/g, '') } }))} />
+                  value={vTp} onChange={(e) => setDiklatForm((f) => ({ ...f, [fKey]: { ...f[fKey], tp: e.target.value.replace(/[^0-9]/g, '') } }))} />
               </FormField>
               <FormField label="Lulusan" className="!mb-0">
                 <input type="text" inputMode="numeric" autoComplete="off" className={`form-input !py-2 tabular-nums text-center font-bold !rounded-xl ${invalid ? '!border-red-500 !bg-red-50' : ''}`} placeholder="0"
-                  value={vTl} onChange={(e) => setDiklatForm((f) => ({ ...f, [d.id]: { ...f[d.id], tl: e.target.value.replace(/[^0-9]/g, '') } }))} />
+                  value={vTl} onChange={(e) => setDiklatForm((f) => ({ ...f, [fKey]: { ...f[fKey], tl: e.target.value.replace(/[^0-9]/g, '') } }))} />
               </FormField>
               {invalid && <p className="text-[10px] font-bold text-red-600 col-span-full text-right">Lulusan tidak boleh lebih besar dari Peserta</p>}
             </div>
@@ -505,12 +529,17 @@ export default function TargetPkUptPage() {
                           </p>
                           {(diklatByProgram.get(g.parentId) || []).length > 0 && (
                             <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
-                              {(diklatByProgram.get(g.parentId) || []).map((d) => (
-                                <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
-                                  <span className="font-semibold text-slate-600">• {d.name}</span>
-                                  <span className="tabular-nums text-slate-500 whitespace-nowrap">{fmtNum(d.targetPeserta)} / {fmtNum(d.targetLulusan)}</span>
-                                </div>
-                              ))}
+                              {(diklatByProgram.get(g.parentId) || []).map((d) => {
+                                const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[g.parentId] : null
+                                const tp = (tbp && tbp.targetPeserta !== undefined) ? tbp.targetPeserta : (d.targetPeserta || 0)
+                                const tl = (tbp && tbp.targetLulusan !== undefined) ? tbp.targetLulusan : (d.targetLulusan || 0)
+                                return (
+                                  <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
+                                    <span className="font-semibold text-slate-600">• {d.name}</span>
+                                    <span className="tabular-nums text-slate-500 whitespace-nowrap">{fmtNum(tp)} / {fmtNum(tl)}</span>
+                                  </div>
+                                )
+                              })}
                             </div>
                           )}
                         </td>
@@ -536,12 +565,17 @@ export default function TargetPkUptPage() {
                               <p className="text-xs text-slate-500 mt-0.5">{g.parentName}</p>
                               {rincian.length > 0 ? (
                                 <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
-                                  {rincian.map((d) => (
-                                    <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
-                                      <span className="font-semibold text-slate-600">• {d.name}</span>
-                                      <span className="tabular-nums text-slate-500 whitespace-nowrap">{fmtNum(d.targetPeserta)} / {fmtNum(d.targetLulusan)}</span>
-                                    </div>
-                                  ))}
+                                  {rincian.map((d) => {
+                                    const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
+                                    const dTp = (tbp && tbp.targetPeserta !== undefined) ? tbp.targetPeserta : (d.targetPeserta || 0)
+                                    const dTl = (tbp && tbp.targetLulusan !== undefined) ? tbp.targetLulusan : (d.targetLulusan || 0)
+                                    return (
+                                      <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
+                                        <span className="font-semibold text-slate-600">• {d.name}</span>
+                                        <span className="tabular-nums text-slate-500 whitespace-nowrap">{fmtNum(dTp)} / {fmtNum(dTl)}</span>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               ) : (
                                 <p className="text-[11px] text-slate-400 mt-1.5 italic">Tanpa rincian diklat — angka langsung per program</p>
@@ -617,7 +651,7 @@ export default function TargetPkUptPage() {
                   <div className="divide-y divide-slate-100">
                     {g.parentId && g.children.length === 0 && (diklatByProgram.get(g.parentId) || []).length > 0 && (
                       <div className="px-4 py-4 bg-white">
-                        <DiklatInputList rincian={diklatByProgram.get(g.parentId)} contextName={g.parentName} />
+                        <DiklatInputList rincian={diklatByProgram.get(g.parentId)} contextName={g.parentName} programId={g.parentId} />
                       </div>
                     )}
                     {g.children.map((p) => {
@@ -637,28 +671,7 @@ export default function TargetPkUptPage() {
                             </span>
                           </div>
                           {hasRincian ? (
-                            <div className="mt-3 space-y-2 rounded-xl bg-slate-50/70 border border-slate-100 p-3">
-                              <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Rincian diklat ({rincian.length}) — di bawah {p.name}</p>
-                              {rincian.map((d) => {
-                                const vTp = diklatForm[d.id]?.tp ?? String(d.targetPeserta || 0)
-                                const vTl = diklatForm[d.id]?.tl ?? String(d.targetLulusan || 0)
-                                const invalid = (Number(vTl) || 0) > (Number(vTp) || 0)
-                                return (
-                                  <div key={d.id} className={`grid grid-cols-1 sm:grid-cols-[1fr_130px_130px] gap-2 items-center rounded-xl border p-2.5 ${invalid ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
-                                    <p className="text-[13px] font-semibold text-slate-700">• {d.name}</p>
-                                    <FormField label="Peserta" className="!mb-0">
-                                      <input type="text" inputMode="numeric" autoComplete="off" className="form-input !py-2 tabular-nums text-center font-bold !rounded-xl" placeholder="0"
-                                        value={vTp} onChange={(e) => setDiklatForm((f) => ({ ...f, [d.id]: { ...f[d.id], tp: e.target.value.replace(/[^0-9]/g, '') } }))} />
-                                    </FormField>
-                                    <FormField label="Lulusan" className="!mb-0">
-                                      <input type="text" inputMode="numeric" autoComplete="off" className={`form-input !py-2 tabular-nums text-center font-bold !rounded-xl ${invalid ? '!border-red-500 !bg-red-50' : ''}`} placeholder="0"
-                                        value={vTl} onChange={(e) => setDiklatForm((f) => ({ ...f, [d.id]: { ...f[d.id], tl: e.target.value.replace(/[^0-9]/g, '') } }))} />
-                                    </FormField>
-                                    {invalid && <p className="text-[10px] font-bold text-red-600 col-span-full text-right">⚠️ Lulusan tidak boleh &gt; Peserta</p>}
-                                  </div>
-                                )
-                              })}
-                            </div>
+                            <DiklatInputList rincian={rincian} contextName={p.name} programId={p.id} />
                           ) : (
                             <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_150px_150px] gap-3 items-center">
                               <p className="text-xs text-slate-500">Tanpa rincian — isi langsung per program turunan. <Link to="/upt/diklat" className="underline font-bold">+ Tambah rincian diklat</Link></p>

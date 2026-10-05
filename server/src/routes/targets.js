@@ -377,9 +377,9 @@ router.put("/my", requireUpt, async (req, res) => {
       return res.status(403).json({ error: `Target PK ${y} sudah dikirim ke Pimpinan dan terkunci (${tSub.status}). Ajukan Perubahan Target PK untuk revisi.` });
     }
 
-    // 1) Terapkan target per diklat (validasi dulu, update kemudian)
+    // 1) Terapkan target per diklat (independen per program via targetByProgram)
     const diklatTargets = Array.isArray(rawDiklatTargets) ? rawDiklatTargets : [];
-    const diklatUpdates = new Map(); // diklatId -> { tp, tl }
+    const diklatUpdates = new Map(); // diklatId -> { doc, byProg, fallbackTp, fallbackTl }
     for (const dt of diklatTargets) {
       const diklat = await Diklat.findByPk(dt.diklatId);
       if (!diklat) return res.status(404).json({ error: `Diklat "${dt.diklatId}" tidak ditemukan.` });
@@ -394,10 +394,35 @@ router.put("/my", requireUpt, async (req, res) => {
       if (tl > tp) {
         return res.status(400).json({ error: `Diklat "${diklat.name}": Lulusan (${tl}) tidak boleh lebih besar dari Peserta (${tp}).` });
       }
-      diklatUpdates.set(String(diklat.id), { doc: diklat, tp, tl });
+      const dKey = String(diklat.id);
+      if (!diklatUpdates.has(dKey)) {
+        const curTbp = (diklat.targetByProgram && typeof diklat.targetByProgram === 'object') ? { ...diklat.targetByProgram } : {};
+        diklatUpdates.set(dKey, { doc: diklat, byProg: curTbp, fallbackTp: tp, fallbackTl: tl });
+      }
+      const u = diklatUpdates.get(dKey);
+      if (dt.programId) {
+        u.byProg[String(dt.programId)] = { targetPeserta: tp, targetLulusan: tl };
+      } else {
+        u.fallbackTp = tp;
+        u.fallbackTl = tl;
+      }
     }
     for (const [, u] of diklatUpdates) {
-      await u.doc.update({ targetPeserta: u.tp, targetLulusan: u.tl });
+      const pids = Array.isArray(u.doc.programIds) ? u.doc.programIds.map(String) : [];
+      let totTp = 0;
+      let totTl = 0;
+      if (Object.keys(u.byProg).length > 0) {
+        for (const [pid, val] of Object.entries(u.byProg)) {
+          if (!pids.length || pids.includes(String(pid))) {
+            totTp += Number(val?.targetPeserta) || 0;
+            totTl += Number(val?.targetLulusan) || 0;
+          }
+        }
+      } else {
+        totTp = u.fallbackTp;
+        totTl = u.fallbackTl;
+      }
+      await u.doc.update({ targetPeserta: totTp, targetLulusan: totTl, targetByProgram: u.byProg });
     }
 
     // 2) Target langsung per program (untuk program tanpa rincian). Selalu catat disebut agar 0 bisa menghapus.
@@ -435,6 +460,7 @@ router.put("/my", requireUpt, async (req, res) => {
     for (const [, u] of diklatUpdates) {
       const ids = Array.isArray(u.doc.programIds) ? u.doc.programIds : [];
       for (const pid of ids) touched.add(String(pid));
+      for (const pid of Object.keys(u.byProg)) touched.add(String(pid));
     }
     for (const pid of directMap.keys()) touched.add(String(pid));
 
@@ -443,12 +469,16 @@ router.put("/my", requireUpt, async (req, res) => {
     for (const pid of touched) progSum.set(pid, { tp: 0, tl: 0 });
     for (const d of allDiklats) {
       const ids = Array.isArray(d.programIds) ? d.programIds : [];
+      const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram : {};
       for (const pid of ids) {
         const key = String(pid);
         if (!touched.has(key)) continue;
         const cur = progSum.get(key) || { tp: 0, tl: 0 };
-        cur.tp += Number(d.targetPeserta) || 0;
-        cur.tl += Number(d.targetLulusan) || 0;
+        const progVal = tbp[key];
+        const tp = (progVal && progVal.targetPeserta !== undefined) ? Number(progVal.targetPeserta) : (Number(d.targetPeserta) || 0);
+        const tl = (progVal && progVal.targetLulusan !== undefined) ? Number(progVal.targetLulusan) : (Number(d.targetLulusan) || 0);
+        cur.tp += tp;
+        cur.tl += tl;
         progSum.set(key, cur);
       }
     }

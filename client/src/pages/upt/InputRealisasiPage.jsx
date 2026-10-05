@@ -92,15 +92,16 @@ export default function InputRealisasiPage() {
     }
     const dl = diklatByProgram.get(pid) || []
     if (dl.length > 0) {
-      return String(dl.reduce((s, d) => s + (Number(diklatValues[d.id]?.[key]) || 0), 0))
+      return String(dl.reduce((s, d) => s + (Number(diklatValues[`${pid}_${d.id}`]?.[key]) || 0), 0))
     }
     return values[pid]?.[key] ?? '0'
   }
 
-  function handleDiklatNumChange(diklatId, key, raw) {
+  function handleDiklatNumChange(programId, diklatId, key, raw) {
     const cleaned = raw.replace(/[^0-9]/g, '')
-    setDiklatValues((prev) => ({ ...prev, [diklatId]: { ...prev[diklatId], [key]: cleaned } }))
-    setDiklatTouched((prev) => ({ ...prev, [diklatId]: true }))
+    const dKey = `${programId}_${diklatId}`
+    setDiklatValues((prev) => ({ ...prev, [dKey]: { ...prev[dKey], [key]: cleaned } }))
+    setDiklatTouched((prev) => ({ ...prev, [dKey]: true }))
   }
 
   function rowTotal(pid) {
@@ -227,18 +228,21 @@ export default function InputRealisasiPage() {
       // Prefill rincian diklat bulan ini dari database
       {
         const rows = diklatRes.data?.diklatRealisations || []
-        const byId = new Map(rows.map((r) => [r.diklatId, r]))
+        const byProgDiklat = new Map(rows.map((r) => [`${r.programId}_${r.diklatId}`, r]))
         const initD = {}
         for (const d of loadedDiklats) {
-          const r = byId.get(d.id)
-          initD[d.id] = r
-            ? {
-                pesertaL: String(r.pesertaL ?? '0'),
-                pesertaP: String(r.pesertaP ?? '0'),
-                lulusanL: String(r.lulusanL ?? '0'),
-                lulusanP: String(r.lulusanP ?? '0'),
-              }
-            : { ...EMPTY }
+          for (const pid of d.programIds || []) {
+            const k = `${pid}_${d.id}`
+            const r = byProgDiklat.get(k)
+            initD[k] = r
+              ? {
+                  pesertaL: String(r.pesertaL ?? '0'),
+                  pesertaP: String(r.pesertaP ?? '0'),
+                  lulusanL: String(r.lulusanL ?? '0'),
+                  lulusanP: String(r.lulusanP ?? '0'),
+                }
+              : { ...EMPTY }
+          }
         }
         setDiklatValues(initD)
       }
@@ -350,20 +354,19 @@ export default function InputRealisasiPage() {
   function buildDiklatItems() {
     // Hanya rincian yang disentuh user (nol ikut agar pengosongan tersimpan)
     const out = []
-    for (const d of diklats) {
-      if (!diklatTouched[d.id]) continue
-      const v = diklatValues[d.id] || EMPTY
-      const progIds = d.programIds || []
-      for (const pid of progIds) {
-        out.push({
-          diklatId: d.id,
-          programId: pid,
-          pesertaL: Number(v.pesertaL) || 0,
-          pesertaP: Number(v.pesertaP) || 0,
-          lulusanL: Number(v.lulusanL) || 0,
-          lulusanP: Number(v.lulusanP) || 0,
-        })
-      }
+    for (const [k, touched] of Object.entries(diklatTouched)) {
+      if (!touched) continue
+      const [pid, dId] = k.split('_')
+      if (!pid || !dId) continue
+      const v = diklatValues[k] || EMPTY
+      out.push({
+        diklatId: dId,
+        programId: pid,
+        pesertaL: Number(v.pesertaL) || 0,
+        pesertaP: Number(v.pesertaP) || 0,
+        lulusanL: Number(v.lulusanL) || 0,
+        lulusanP: Number(v.lulusanP) || 0,
+      })
     }
     return out
   }
@@ -828,7 +831,8 @@ export default function InputRealisasiPage() {
                     </tr>
                     {/* Rincian diklat di bawah program turunan — isi per diklat, total naik otomatis */}
                     {hasDiklat && diklatList.map((d) => {
-                      const dv = diklatValues[d.id] || EMPTY
+                      const dKey = `${p.id}_${d.id}`
+                      const dv = diklatValues[dKey] || EMPTY
                       const dPesertaL = Number(dv.pesertaL) || 0, dPesertaP = Number(dv.pesertaP) || 0
                       const dLulusanL = Number(dv.lulusanL) || 0, dLulusanP = Number(dv.lulusanP) || 0
                       const dInvalid = dLulusanL > dPesertaL || dLulusanP > dPesertaP
@@ -860,11 +864,11 @@ export default function InputRealisasiPage() {
                             </td>
                             <td className="p-1">
                               <input inputMode="numeric" className={diklatInputCls(dPesertaL > 0)} placeholder="0" value={dv.pesertaL ?? '0'}
-                                onChange={(e) => handleDiklatNumChange(d.id, 'pesertaL', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Peserta Laki-laki`} />
+                                onChange={(e) => handleDiklatNumChange(p.id, d.id, 'pesertaL', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Peserta Laki-laki`} />
                             </td>
                             <td className="p-1">
                               <input inputMode="numeric" className={diklatInputCls(dPesertaP > 0)} placeholder="0" value={dv.pesertaP ?? '0'}
-                                onChange={(e) => handleDiklatNumChange(d.id, 'pesertaP', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Peserta Perempuan`} />
+                                onChange={(e) => handleDiklatNumChange(p.id, d.id, 'pesertaP', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Peserta Perempuan`} />
                             </td>
                             <td className="p-1">
                               <div className={`tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border h-[30px] flex items-center justify-center ${dPesertaL + dPesertaP > 0 ? 'bg-sky-600 text-white border-sky-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
@@ -873,11 +877,11 @@ export default function InputRealisasiPage() {
                             </td>
                             <td className="p-1">
                               <input inputMode="numeric" className={diklatLulusanCls(dLulusanL > 0)} placeholder="0" value={dv.lulusanL ?? '0'}
-                                onChange={(e) => handleDiklatNumChange(d.id, 'lulusanL', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Lulusan Laki-laki`} />
+                                onChange={(e) => handleDiklatNumChange(p.id, d.id, 'lulusanL', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Lulusan Laki-laki`} />
                             </td>
                             <td className="p-1">
                               <input inputMode="numeric" className={diklatLulusanCls(dLulusanP > 0)} placeholder="0" value={dv.lulusanP ?? '0'}
-                                onChange={(e) => handleDiklatNumChange(d.id, 'lulusanP', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Lulusan Perempuan`} />
+                                onChange={(e) => handleDiklatNumChange(p.id, d.id, 'lulusanP', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Lulusan Perempuan`} />
                             </td>
                             <td className="p-1">
                               <div className={`tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border h-[30px] flex items-center justify-center ${dLulusanL + dLulusanP > 0 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>

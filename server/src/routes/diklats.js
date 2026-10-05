@@ -77,15 +77,28 @@ router.post("/", requireUpt, async (req, res) => {
       if (!prog) return res.status(404).json({ error: `Program "${pid}" tidak ditemukan.` });
     }
 
-    // Cek duplikat nama dalam UPT+tahun yang sama
-    const dup = await Diklat.findOne({
+    // Cek duplikat nama dalam program yang beririsan untuk UPT+tahun yang sama
+    const existingSameName = await Diklat.findAll({
       where: { uptId, year, [Op.and]: [where(fn("LOWER", col("name")), name.toLowerCase())] },
     });
-    if (dup) return res.status(409).json({ error: `Diklat "${name}" sudah ada untuk tahun ${year}.` });
+    const hasOverlap = existingSameName.some((ex) => {
+      const exPids = Array.isArray(ex.programIds) ? ex.programIds.map(String) : [];
+      return programIds.some((pid) => exPids.includes(String(pid)));
+    });
+    if (hasOverlap) {
+      return res.status(409).json({ error: `Diklat "${name}" sudah terdaftar pada program yang dipilih untuk tahun ${year}.` });
+    }
+
+    const initialTbp = {};
+    for (const pid of programIds) {
+      initialTbp[String(pid)] = { targetPeserta: 0, targetLulusan: 0 };
+    }
 
     const doc = await Diklat.create({
       uptId, year, name, programIds,
-      targetPeserta: 0, targetLulusan: 0, isActive: true, createdBy: req.uid,
+      targetPeserta: 0, targetLulusan: 0,
+      targetByProgram: initialTbp,
+      isActive: true, createdBy: req.uid,
     });
     audit(req, "CREATE_DIKLAT", "diklat", doc.id, { name, year });
     res.status(201).json({ id: doc.id, message: `Diklat "${name}" ditambahkan.` });
@@ -242,10 +255,33 @@ router.post("/import", requireUpt, async (req, res) => {
         // Update pemetaan program jika ada program baru
         const currentPids = Array.isArray(existing.programIds) ? existing.programIds.map(String) : [];
         const mergedPids = [...new Set([...currentPids, ...validPids])];
+        const curTbp = (existing.targetByProgram && typeof existing.targetByProgram === 'object') ? { ...existing.targetByProgram } : {};
+
+        let hasTbpChange = false;
+        for (const pid of validPids) {
+          const prev = curTbp[pid] || {};
+          const newTp = tp > 0 ? tp : (prev.targetPeserta || 0);
+          const newTl = tl > 0 ? tl : (prev.targetLulusan || 0);
+          if (newTp !== prev.targetPeserta || newTl !== prev.targetLulusan) {
+            curTbp[pid] = { targetPeserta: newTp, targetLulusan: newTl };
+            hasTbpChange = true;
+          }
+        }
+
         const patch = {};
         if (mergedPids.length > currentPids.length) patch.programIds = mergedPids;
-        if (tp > 0 && (!existing.targetPeserta || existing.targetPeserta === 0)) patch.targetPeserta = tp;
-        if (tl > 0 && (!existing.targetLulusan || existing.targetLulusan === 0)) patch.targetLulusan = tl;
+        if (hasTbpChange) {
+          patch.targetByProgram = curTbp;
+          let totTp = 0, totTl = 0;
+          for (const [pKey, pVal] of Object.entries(curTbp)) {
+            if (mergedPids.includes(pKey)) {
+              totTp += Number(pVal?.targetPeserta) || 0;
+              totTl += Number(pVal?.targetLulusan) || 0;
+            }
+          }
+          patch.targetPeserta = totTp;
+          patch.targetLulusan = totTl;
+        }
 
         if (Object.keys(patch).length > 0) {
           await existing.update(patch);
@@ -254,13 +290,18 @@ router.post("/import", requireUpt, async (req, res) => {
           skipped.push({ name, reason: "sudah terdaftar di program ini" });
         }
       } else {
+        const initialTbp = {};
+        for (const pid of validPids) {
+          initialTbp[String(pid)] = { targetPeserta: tp, targetLulusan: tl };
+        }
         const doc = await Diklat.create({
           uptId,
           year,
           name,
           programIds: validPids,
-          targetPeserta: tp,
-          targetLulusan: tl,
+          targetPeserta: tp * validPids.length,
+          targetLulusan: tl * validPids.length,
+          targetByProgram: initialTbp,
           isActive: true,
           createdBy: req.uid,
         });

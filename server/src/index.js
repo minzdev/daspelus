@@ -116,6 +116,18 @@ async function start() {
       await sequelize.query("ALTER TABLE `absorption_submissions` ADD UNIQUE INDEX `uniq_abs_sub_upt_year_month` (`upt_id`, `year`, `month`);");
       console.log("[db] Unique index penyerapan bulanan dibuat.");
     }
+
+    // Pastikan kolom target_by_program ada di tabel diklats (untuk target independen per program)
+    try {
+      const [diklatCols] = await sequelize.query("DESCRIBE `diklats`");
+      const diklatFields = diklatCols.map((c) => c.Field);
+      if (!diklatFields.includes("target_by_program")) {
+        await sequelize.query("ALTER TABLE `diklats` ADD COLUMN `target_by_program` JSON NULL DEFAULT NULL AFTER `target_lulusan`;");
+        console.log("[db] Kolom 'target_by_program' berhasil ditambahkan ke tabel diklats.");
+      }
+    } catch (e) {
+      console.warn("[db] cek kolom diklats.target_by_program:", e.message);
+    }
   } catch (e) {
     console.error("[db] sync error", e.message);
   }
