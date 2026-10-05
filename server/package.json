@@ -9,6 +9,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "seed": "node scripts/seed.js",
+    "seed:roles": "node scripts/seed-roles.js",
     "clean:seed": "node scripts/clean-seed.js",
     "clean:production": "node scripts/clean-production.js"
   },

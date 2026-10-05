@@ -127,13 +127,19 @@ router.patch("/:id/approve", async (req, res) => {
   }
 });
 
-/** PATCH /api/submissions/:id/approve-bpsdmp - BPSDMP approve -> locked */
+/** PATCH /api/submissions/:id/approve-bpsdmp - BPSDMP / Pusbang approve -> locked */
 router.patch("/:id/approve-bpsdmp", async (req, res) => {
   const user = req.user;
-  if (!isSuperAdmin(user)) return res.status(403).json({ error: "Hanya Super Admin BPSDMP yang dapat mengunci final." });
+  if (!isSuperAdmin(user) && !isPusbang(user)) return res.status(403).json({ error: "Hanya Super Admin BPSDMP atau Pusbang yang dapat menyetujui." });
   try {
     const doc = await findSubmissionDoc(req.params.id);
     if (!doc) return res.status(404).json({ error: "Laporan tidak ditemukan." });
+    if (isPusbang(user)) {
+      const matra = (user.pusbangMatra || "").toLowerCase();
+      if ((doc.matra || "").toLowerCase() !== matra) {
+        return res.status(403).json({ error: "Anda hanya dapat memproses laporan matra Anda sendiri." });
+      }
+    }
     if (doc.status !== "pending_bpsdmp") return res.status(400).json({ error: `Status laporan ${doc.status}, tidak bisa di-approve BPSDMP.` });
 
     await doc.update({
@@ -147,22 +153,28 @@ router.patch("/:id/approve-bpsdmp", async (req, res) => {
     notifier.notifyRealisasiBpsdmpReview({ doc, upt: { id: doc.uptId, name: doc.uptName, code: doc.uptCode }, year: doc.year, month: doc.month, action: 'approve', user });
 
     audit(req, "APPROVE_REALISASI_BPSDMP", "realisasi", doc.submissionId || doc.id, { uptCode: doc.uptCode, year: doc.year, month: doc.month });
-    res.json({ message: `Laporan ${doc.month}/${doc.year} disetujui BPSDMP dan terkunci permanen.` });
+    res.json({ message: `Laporan ${doc.month}/${doc.year} disetujui dan terkunci permanen.` });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Gagal menyetujui BPSDMP." });
+    res.status(500).json({ error: "Gagal menyetujui laporan." });
   }
 });
 
-/** PATCH /api/submissions/:id/reject - Pimpinan reject */
+/** PATCH /api/submissions/:id/reject - Pimpinan / Admin / Pusbang reject */
 router.patch("/:id/reject", async (req, res) => {
   const { note } = req.body;
   const user = req.user;
-  if (!isPimpinan(user) && !isSuperAdmin(user)) return res.status(403).json({ error: "Hanya Pimpinan yang dapat menolak." });
+  if (!isPimpinan(user) && !isSuperAdmin(user) && !isPusbang(user)) return res.status(403).json({ error: "Hanya Pimpinan, Admin BPSDMP, atau Pusbang yang dapat menolak." });
   try {
     const doc = await findSubmissionDoc(req.params.id);
     if (!doc) return res.status(404).json({ error: "Laporan tidak ditemukan." });
     if (isPimpinan(user) && doc.uptId !== user.uptId) return res.status(403).json({ error: "Hanya untuk UPT Anda." });
+    if (isPusbang(user)) {
+      const matra = (user.pusbangMatra || "").toLowerCase();
+      if ((doc.matra || "").toLowerCase() !== matra) {
+        return res.status(403).json({ error: "Anda hanya dapat memproses laporan matra Anda sendiri." });
+      }
+    }
 
     await doc.update({
       status: "rejected", rejectedBy: req.uid, rejectedAt: new Date(), rejectNote: note || "",

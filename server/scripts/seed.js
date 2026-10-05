@@ -118,6 +118,10 @@ async function main() {
     console.log(`[ok] Target PK diisi untuk ${upt.code} (${allProgs.length} program × 12 bulan)`);
   }
 
+  // 5. Buat akun Pusbang, Pimpinan UPT, dan Admin UPT
+  const { seedRoles } = require("./seed-roles");
+  await seedRoles();
+
   console.log(`\n=== SELESAI ===`);
   console.log(`Login admin: ${email} / ${password}`);
   console.log(`Tahun: ${year}`);
