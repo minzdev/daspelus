@@ -11,14 +11,42 @@ const CATEGORY_FILTER = [
   { value: 'aparatur', label: 'Aparatur' },
 ]
 
+const MATRA_OPTIONS = [
+  { value: 'semua', label: 'Semua Matra' },
+  { value: 'darat', label: 'Matra Darat' },
+  { value: 'laut', label: 'Matra Laut' },
+  { value: 'udara', label: 'Matra Udara' },
+  { value: 'aparatur', label: 'Aparatur' },
+]
+
 export default function ProgramDetailPage() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState('')
+  const [matra, setMatra] = useState('semua')
+  const [selectedUptId, setSelectedUptId] = useState('')
+  const [uptOptions, setUptOptions] = useState([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('semua')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Ambil opsi UPT untuk dropdown filter
+  useEffect(() => {
+    api.get('/upts/options')
+      .then((res) => setUptOptions(res.data?.options || []))
+      .catch(() => {})
+  }, [])
+
+  const filteredUptOptions = useMemo(() => {
+    if (!uptOptions.length) return []
+    if (matra === 'semua') return uptOptions
+    return uptOptions.filter((u) => {
+      const m = (u.matra || '').toLowerCase()
+      if (matra === 'aparatur') return m === 'aparatur'
+      return m === matra
+    })
+  }, [uptOptions, matra])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -26,6 +54,8 @@ export default function ProgramDetailPage() {
     try {
       const params = { year }
       if (month) params.month = month
+      if (matra && matra !== 'semua') params.matra = matra
+      if (selectedUptId) params.uptId = selectedUptId
       const { data: res } = await api.get('/reports/program-detail', { params })
       setData(res)
     } catch (err) {
@@ -33,7 +63,7 @@ export default function ProgramDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [year, month])
+  }, [year, month, matra, selectedUptId])
 
   useEffect(() => { load() }, [load])
 
@@ -88,14 +118,22 @@ export default function ProgramDetailPage() {
       { header: 'Total Lulusan', key: 'totLul', width: 14 },
       { header: 'UPT', key: 'upt', width: 8 },
     ]
+    const selUpt = uptOptions.find((u) => u.id === selectedUptId)
+    const selMatra = MATRA_OPTIONS.find((m) => m.value === matra)?.label || 'Semua Matra'
     const title = `REKAP DETAIL DATA PROGRAM — ${data?.monthName ? data.monthName + ' ' : ''}${year}`
     ws.mergeCells('A1:K1')
     ws.getCell('A1').value = title
     ws.getCell('A1').font = { size: 12, bold: true, color: { argb: '0F172A' } }
     ws.getCell('A1').alignment = { horizontal: 'center' }
     ws.getRow(1).height = 22
+
+    let subTitle = `BPSDMP Kementerian Perhubungan — ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    if (matra !== 'semua') subTitle += ` | Matra: ${selMatra}`
+    if (selUpt) subTitle += ` | UPT: [${selUpt.code}] ${selUpt.name}`
+    if (category !== 'semua') subTitle += ` | Kategori: ${category.toUpperCase()}`
+
     ws.mergeCells('A2:K2')
-    ws.getCell('A2').value = `BPSDMP Kementerian Perhubungan — ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} (Pure Realisasi)`
+    ws.getCell('A2').value = subTitle
     ws.getCell('A2').font = { size: 8, color: { argb: '64748B' } }
     ws.getCell('A2').alignment = { horizontal: 'center' }
     const hdr = ws.getRow(4)
@@ -131,22 +169,37 @@ export default function ProgramDetailPage() {
     fr.getCell(1).value = 'TOTAL'
     fr.getCell(1).alignment = { horizontal: 'right' }
     ws.views = [{ state: 'frozen', ySplit: 4 }]
-    ws.autoFilter = { from: 'A4', to: 'M4' }
+    ws.autoFilter = { from: 'A4', to: 'K4' }
     ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 }
     const buf = await wb.xlsx.writeBuffer()
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `Detail_Data_Program_${year}${month ? '_' + String(month).padStart(2, '0') : ''}.xlsx`
+    const matraSlug = matra !== 'semua' ? `_${matra}` : ''
+    const uptSlug = selUpt ? `_${selUpt.code.replace(/[^\w\-]+/g, '')}` : ''
+    a.download = `Detail_Data_Program_${year}${month ? '_' + String(month).padStart(2, '0') : ''}${matraSlug}${uptSlug}.xlsx`
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href)
   }
+
+  const hasFilter = matra !== 'semua' || selectedUptId !== '' || month !== '' || category !== 'semua' || search.trim() !== ''
+  const handleResetFilter = () => {
+    setMonth('')
+    setMatra('semua')
+    setSelectedUptId('')
+    setCategory('semua')
+    setSearch('')
+  }
+
+  const selectedUptObj = useMemo(() => {
+    return uptOptions.find((u) => u.id === selectedUptId)
+  }, [uptOptions, selectedUptId])
 
   return (
     <div className="animate-fadeUp space-y-5 max-w-[1400px] mx-auto">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Detail Data Program</h1>
-          <p className="text-sm text-slate-500 mt-1 max-w-3xl">Rekap per program turunan (mis. <em>Pola Pembibitan</em>) akumulasi dari semua matra — Darat, Laut, Udara, Aparatur. Menampilkan total peserta & lulusan L/P, target, dan sebaran matra.</p>
+          <p className="text-sm text-slate-500 mt-1 max-w-3xl">Rekap per program turunan akumulasi lintas matra dan UPT. Dilengkapi filter spesifik per matra dan per UPT untuk analisis terperinci.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button type="button" className="btn-secondary !rounded-lg !py-2" onClick={load}><IconRefresh className="h-4 w-4" /> Refresh</button>
@@ -157,7 +210,7 @@ export default function ProgramDetailPage() {
       {error && <Alert type="error">{error}</Alert>}
 
       <div className="card rounded-xl border border-slate-200 p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           <div>
             <label className="form-label !mb-1.5 !text-[11px]">Tahun</label>
             <select className="form-input !py-2 !text-sm" value={year} onChange={(e) => setYear(Number(e.target.value))}>
@@ -169,6 +222,34 @@ export default function ProgramDetailPage() {
             <select className="form-input !py-2 !text-sm" value={month} onChange={(e) => setMonth(e.target.value)}>
               <option value="">Semua Bulan</option>
               {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label !mb-1.5 !text-[11px] flex items-center gap-1"><IconFilter className="h-3 w-3" /> Matra</label>
+            <select
+              className="form-input !py-2 !text-sm font-semibold"
+              value={matra}
+              onChange={(e) => {
+                setMatra(e.target.value)
+                setSelectedUptId('')
+              }}
+            >
+              {MATRA_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label className="form-label !mb-1.5 !text-[11px] flex items-center gap-1"><IconFilter className="h-3 w-3" /> Pilih UPT</label>
+            <select
+              className="form-input !py-2 !text-sm font-semibold"
+              value={selectedUptId}
+              onChange={(e) => setSelectedUptId(e.target.value)}
+            >
+              <option value="">Semua UPT {matra !== 'semua' ? `(${filteredUptOptions.length})` : `(${uptOptions.length})`}</option>
+              {filteredUptOptions.map((u) => (
+                <option key={u.id} value={u.id}>
+                  [{u.code}] {u.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -185,6 +266,48 @@ export default function ProgramDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Bar info filter aktif */}
+        {hasFilter && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Filter Aktif:</span>
+              {matra !== 'semua' && (
+                <span className="rounded-full bg-slate-100 text-slate-700 font-bold px-2 py-0.5 border">
+                  Matra: <span className="capitalize text-slate-900">{matra}</span>
+                </span>
+              )}
+              {selectedUptObj && (
+                <span className="rounded-full bg-navy-50 text-navy-800 font-bold px-2 py-0.5 border border-navy-200">
+                  UPT: <span className="text-navy-950 font-black">[{selectedUptObj.code}] {selectedUptObj.name}</span>
+                </span>
+              )}
+              {month && (
+                <span className="rounded-full bg-sky-50 text-sky-700 font-bold px-2 py-0.5 border border-sky-200">
+                  Bulan: {MONTHS[Number(month) - 1]}
+                </span>
+              )}
+              {category !== 'semua' && (
+                <span className="rounded-full bg-amber-50 text-amber-700 font-bold px-2 py-0.5 border border-amber-200">
+                  Kategori: <span className="capitalize">{category}</span>
+                </span>
+              )}
+              {search.trim() && (
+                <span className="rounded-full bg-slate-100 text-slate-600 font-bold px-2 py-0.5 border">
+                  Cari: &ldquo;{search}&rdquo;
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="text-xs font-bold text-red-600 hover:text-red-700 underline"
+              onClick={handleResetFilter}
+            >
+              Reset Semua Filter
+            </button>
+          </div>
+        )}
+
         {summary && (
           <div className="mt-4 grid gap-3 sm:grid-cols-4">
             <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
@@ -202,9 +325,15 @@ export default function ProgramDetailPage() {
               <p className="text-[11px] text-slate-500">{programs.length} program • {fmtNum(filteredSummary.totalLulusan)} lulusan</p>
             </div>
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
-              <p className="text-[11px] font-bold text-amber-700 uppercase">Matra Terbanyak</p>
-              <p className="text-xs font-semibold text-slate-800 mt-1">Darat · Laut · Udara · Aparatur</p>
-              <p className="text-[11px] text-slate-500">Rincian per matra di tabel</p>
+              <p className="text-[11px] font-bold text-amber-700 uppercase">
+                {selectedUptObj ? 'UPT Terpilih' : matra !== 'semua' ? 'Matra Terpilih' : 'Cakupan Matra'}
+              </p>
+              <p className="text-xs font-black text-slate-900 mt-1 truncate" title={selectedUptObj ? `[${selectedUptObj.code}] ${selectedUptObj.name}` : matra !== 'semua' ? `Matra ${matra.toUpperCase()}` : 'Darat · Laut · Udara · Aparatur'}>
+                {selectedUptObj ? `[${selectedUptObj.code}] ${selectedUptObj.name}` : matra !== 'semua' ? `Matra ${matra.toUpperCase()}` : 'Darat · Laut · Udara · Aparatur'}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {selectedUptObj ? `Matra ${selectedUptObj.matra || '-'}` : matra !== 'semua' ? `${filteredUptOptions.length} UPT pada matra ini` : 'Semua UPT terakumulasi'}
+              </p>
             </div>
           </div>
         )}

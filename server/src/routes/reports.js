@@ -402,6 +402,8 @@ router.get("/program-detail", async (req, res) => {
   }
   const year = Number(req.query.year) || new Date().getFullYear();
   const month = req.query.month ? Number(req.query.month) : null;
+  const matraQuery = req.query.matra ? String(req.query.matra).toLowerCase().trim() : null;
+  const uptIdQuery = req.query.uptId ? String(req.query.uptId).trim() : null;
   try {
     const [realDocs, targetDocs, uptDocs, progDocs, subDocs] = await Promise.all([
       Realization.findAll({ where: { year } }),
@@ -421,7 +423,19 @@ router.get("/program-detail", async (req, res) => {
     if (isPusbang(req.user)) {
       const matra = (req.user.pusbangMatra || "").toLowerCase();
       activeUpts = activeUpts.filter((u) => (u.matra || "").toLowerCase() === matra);
+    } else if (matraQuery && matraQuery !== "semua") {
+      activeUpts = activeUpts.filter((u) => {
+        const m = (u.matra || "").toLowerCase();
+        const ut = (u.uptType || "").toLowerCase();
+        if (matraQuery === "aparatur") return m === "aparatur" || ut === "aparatur";
+        return m === matraQuery;
+      });
     }
+
+    if (uptIdQuery && uptIdQuery !== "semua" && uptIdQuery !== "") {
+      activeUpts = activeUpts.filter((u) => String(u.id) === uptIdQuery);
+    }
+
     const uptMap = new Map(activeUpts.map((u) => [u.id, u.toJSON()]));
     const allProgs = progDocs.map((d) => d.toJSON());
     const flat = buildFlatPrograms(allProgs);
@@ -562,7 +576,17 @@ router.get("/program-detail", async (req, res) => {
       totalLulusanL: progAgg.reduce((s,p)=>s+p.totalLulusanL,0),
       totalLulusanP: progAgg.reduce((s,p)=>s+p.totalLulusanP,0),
     };
-    res.json({ year, month, monthName: month ? MONTH_NAMES[month-1] : null, summary, programs: progAgg });
+    const selectedUptObj = uptIdQuery && uptIdQuery !== "semua" ? uptDocs.find((u) => String(u.id) === uptIdQuery) : null;
+    res.json({
+      year,
+      month,
+      monthName: month ? MONTH_NAMES[month - 1] : null,
+      matra: matraQuery || "semua",
+      uptId: uptIdQuery || "",
+      selectedUpt: selectedUptObj ? { id: selectedUptObj.id, code: selectedUptObj.code, name: selectedUptObj.name, matra: selectedUptObj.matra } : null,
+      summary,
+      programs: progAgg,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Gagal mengambil detail data program." });
