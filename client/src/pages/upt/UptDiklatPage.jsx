@@ -288,14 +288,15 @@ export default function UptDiklatPage() {
 
   function matchProgramClient(inputName) {
     if (!inputName || !programs.length) return null
-    const rawLower = String(inputName).trim().toLowerCase()
-    const clean = normalizeProgString(inputName)
+    const raw = String(inputName).trim()
+    const rawLower = raw.toLowerCase()
+    const clean = normalizeProgString(raw)
 
     // 1. Direct ID match
-    const byId = programs.find((p) => String(p.id) === String(inputName))
+    const byId = programs.find((p) => String(p.id) === raw)
     if (byId) return byId
 
-    // 2. Exact Name match
+    // 2. Exact Name match (case-insensitive)
     const byExact = programs.find((p) => p.name.trim().toLowerCase() === rawLower)
     if (byExact) return byExact
 
@@ -303,29 +304,39 @@ export default function UptDiklatPage() {
     const byClean = programs.find((p) => normalizeProgString(p.name) === clean)
     if (byClean) return byClean
 
-    // 4. Sinonim umum (Mandiri -> Non Pola Pembibitan)
-    if (clean.includes('mandiri')) {
-      const nonPola = programs.find((p) => {
+    // 4. Spesifik "Pola Pembibitan" (HARUS MURNI, BUKAN Non Pola / Mandiri)
+    const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan')
+    if (isPolaMurni) {
+      const pola = programs.find((p) => {
         const pn = normalizeProgString(p.name)
-        return pn.includes('non pola') || pn.includes('mandiri')
+        return pn.includes('pola pembibitan') && !pn.includes('non')
       })
-      if (nonPola) return nonPola
-    }
-    if (clean.includes('pola pembibitan')) {
-      const pola = programs.find((p) => normalizeProgString(p.name).includes('pola pembibitan'))
       if (pola) return pola
     }
 
-    // 5. Partial contains match
-    const byIncludes = programs.find((p) => {
-      const pn = normalizeProgString(p.name)
-      return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean))
-    })
-    if (byIncludes) return byIncludes
+    // 5. Spesifik "Mandiri" atau "Non Pola Pembibitan"
+    const isMandiriOrNonPola = clean.includes('mandiri') || clean.includes('non pola') || clean.includes('non-pola')
+    if (isMandiriOrNonPola) {
+      const nonPola = programs.find((p) => {
+        const pn = normalizeProgString(p.name)
+        return pn.includes('mandiri') || pn.includes('non pola') || pn.includes('non-pola')
+      })
+      if (nonPola) return nonPola
+    }
 
-    // 6. Match parentName jika input mencantumkan nama induk
+    // 6. Partial contains match (prioritaskan yang lebih panjang & spesifik)
+    const candidates = programs
+      .filter((p) => {
+        const pn = normalizeProgString(p.name)
+        return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean))
+      })
+      .sort((a, b) => b.name.length - a.name.length)
+
+    if (candidates.length > 0) return candidates[0]
+
+    // 7. Match parentName jika input mencantumkan nama induk
     const byParent = programs.find((p) => {
-      const prn = normalizeProgString(p.parentName)
+      const prn = normalizeProgString(p.parentName || p.parent_name)
       return prn && (prn === clean || clean.includes(prn))
     })
     if (byParent) return byParent

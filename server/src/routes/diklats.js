@@ -139,29 +139,39 @@ function resolveProgramIdFromInput(input, allPrograms) {
   const byClean = allPrograms.find((p) => normalizeProgString(p.name) === clean);
   if (byClean) return byClean.id;
 
-  // 4. Sinonim umum (Mandiri -> Non Pola Pembibitan)
-  if (clean.includes('mandiri')) {
-    const nonPola = allPrograms.find((p) => {
+  // 4. Spesifik "Pola Pembibitan" (HARUS MURNI, BUKAN Non Pola / Mandiri)
+  const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan');
+  if (isPolaMurni) {
+    const pola = allPrograms.find((p) => {
       const pn = normalizeProgString(p.name);
-      return pn.includes('non pola') || pn.includes('mandiri');
+      return pn.includes('pola pembibitan') && !pn.includes('non');
     });
-    if (nonPola) return nonPola.id;
-  }
-  if (clean.includes('pola pembibitan')) {
-    const pola = allPrograms.find((p) => normalizeProgString(p.name).includes('pola pembibitan'));
     if (pola) return pola.id;
   }
 
-  // 5. Partial contains match
-  const byIncludes = allPrograms.find((p) => {
-    const pn = normalizeProgString(p.name);
-    return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean));
-  });
-  if (byIncludes) return byIncludes.id;
+  // 5. Spesifik "Mandiri" atau "Non Pola Pembibitan"
+  const isMandiriOrNonPola = clean.includes('mandiri') || clean.includes('non pola') || clean.includes('non-pola');
+  if (isMandiriOrNonPola) {
+    const nonPola = allPrograms.find((p) => {
+      const pn = normalizeProgString(p.name);
+      return pn.includes('mandiri') || pn.includes('non pola') || pn.includes('non-pola');
+    });
+    if (nonPola) return nonPola.id;
+  }
 
-  // 6. Match parentName jika input mencantumkan nama induk
+  // 6. Partial contains match (prioritaskan yang lebih panjang & spesifik)
+  const candidates = allPrograms
+    .filter((p) => {
+      const pn = normalizeProgString(p.name);
+      return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean));
+    })
+    .sort((a, b) => b.name.length - a.name.length);
+
+  if (candidates.length > 0) return candidates[0].id;
+
+  // 7. Match parentName jika input mencantumkan nama induk
   const byParent = allPrograms.find((p) => {
-    const prn = normalizeProgString(p.parentName);
+    const prn = normalizeProgString(p.parentName || p.parent_name);
     return prn && (prn === clean || clean.includes(prn));
   });
   if (byParent) return byParent.id;

@@ -547,6 +547,42 @@ router.post("/import", requireUpt, async (req, res) => {
     const diklatTargets = [];
     const directItems = [];
 
+    function resolveProgId(inputName) {
+      if (!inputName) return null;
+      const raw = String(inputName).trim();
+      const rawLower = raw.toLowerCase();
+      const clean = rawLower.replace(/^[a-z0-9][\.\-\)]\s*/i, '').replace(/\(.*?\)/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+      const byId = allPrograms.find((p) => String(p.id) === raw);
+      if (byId) return byId.id;
+      const byExact = allPrograms.find((p) => p.name.trim().toLowerCase() === rawLower);
+      if (byExact) return byExact.id;
+      const byClean = allPrograms.find((p) => p.name.toLowerCase().trim() === clean);
+      if (byClean) return byClean.id;
+
+      const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan');
+      if (isPolaMurni) {
+        const pola = allPrograms.find((p) => p.name.toLowerCase().includes('pola pembibitan') && !p.name.toLowerCase().includes('non'));
+        if (pola) return pola.id;
+      }
+
+      const isMandiriOrNonPola = clean.includes('mandiri') || clean.includes('non pola') || clean.includes('non-pola');
+      if (isMandiriOrNonPola) {
+        const nonPola = allPrograms.find((p) => p.name.toLowerCase().includes('mandiri') || p.name.toLowerCase().includes('non pola') || p.name.toLowerCase().includes('non-pola'));
+        if (nonPola) return nonPola.id;
+      }
+
+      const candidates = allPrograms
+        .filter((p) => {
+          const pn = p.name.toLowerCase().trim();
+          return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean));
+        })
+        .sort((a, b) => b.name.length - a.name.length);
+      if (candidates.length > 0) return candidates[0].id;
+
+      return null;
+    }
+
     for (const item of rawItems) {
       const rawName = String(item.name || "").trim();
       const targetVal = Math.max(0, parseInt(item.target ?? item.targetPk ?? item.targetPeserta, 10) || 0);
@@ -554,9 +590,7 @@ router.post("/import", requireUpt, async (req, res) => {
       // Cari program
       let pid = item.programId;
       if (!pid && item.programName) {
-        const clean = String(item.programName).toLowerCase().trim();
-        const found = allPrograms.find(p => p.id === item.programName || p.name.toLowerCase().trim() === clean || clean.includes(p.name.toLowerCase().trim()));
-        if (found) pid = found.id;
+        pid = resolveProgId(item.programName);
       }
       if (!pid || !progMap.has(pid)) continue;
 
@@ -565,7 +599,7 @@ router.post("/import", requireUpt, async (req, res) => {
           where: { uptId, year: y, [Op.and]: [where(fn("LOWER", col("name")), rawName.toLowerCase())] }
         });
         if (!doc) {
-          const tbp = { [String(pid)]: { targetPeserta: targetVal, targetLulusan: targetVal } };
+          const tbp = { [String(pid)]: { targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal } };
           doc = await Diklat.create({
             uptId, year: y, name: rawName, programIds: [String(pid)],
             targetPeserta: targetVal, targetLulusan: targetVal,
@@ -577,17 +611,17 @@ router.post("/import", requireUpt, async (req, res) => {
           const curPids = Array.isArray(doc.programIds) ? doc.programIds.map(String) : [];
           if (!curPids.includes(String(pid))) curPids.push(String(pid));
           const curTbp = (doc.targetByProgram && typeof doc.targetByProgram === 'object') ? { ...doc.targetByProgram } : {};
-          curTbp[String(pid)] = { targetPeserta: targetVal, targetLulusan: targetVal };
+          curTbp[String(pid)] = { targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal };
           let tot = 0;
           for (const [k, v] of Object.entries(curTbp)) {
-            if (curPids.includes(k)) tot += Number(v?.targetPeserta) || 0;
+            if (curPids.includes(k)) tot += Number(v?.targetPeserta ?? v?.targetPk) || 0;
           }
           await doc.update({ programIds: curPids, targetByProgram: curTbp, targetPeserta: tot, targetLulusan: tot });
           updatedCount++;
         }
-        diklatTargets.push({ diklatId: doc.id, programId: pid, targetPeserta: targetVal, targetLulusan: targetVal });
+        diklatTargets.push({ diklatId: doc.id, programId: pid, targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal, target: targetVal });
       } else {
-        directItems.push({ programId: pid, targetPeserta: targetVal, targetLulusan: targetVal });
+        directItems.push({ programId: pid, targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal, target: targetVal });
       }
     }
 
