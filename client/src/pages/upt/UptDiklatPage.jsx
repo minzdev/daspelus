@@ -749,8 +749,52 @@ export default function UptDiklatPage() {
         return
       }
 
-      const { data } = await api.post('/diklats/import', { year, items: finalItems })
-      toast.success('Import Berhasil', data.message, 7000)
+      try {
+        const { data } = await api.post('/diklats/import', { year, items: finalItems })
+        toast.success('Import Berhasil', data.message, 7000)
+      } catch (importErr) {
+        const errMsg = String(importErr.response?.data?.error || importErr.message || '')
+        // Jika backend VPS masih memori lama yang meminta 1 program tujuan
+        if (errMsg.toLowerCase().includes('program') || importErr.response?.status === 400) {
+          // Kelompokkan diklat per program
+          const groups = {}
+          for (const it of finalItems) {
+            const pid = it.programId
+            if (!groups[pid]) groups[pid] = []
+            groups[pid].push(it)
+          }
+
+          let createdTotal = 0
+          for (const [pid, groupItems] of Object.entries(groups)) {
+            try {
+              // Coba format lama: programIds + names
+              await api.post('/diklats/import', {
+                year,
+                programIds: [pid],
+                names: groupItems.map((g) => g.name),
+              })
+              createdTotal += groupItems.length
+            } catch (innerErr) {
+              // Fallback terakhir: buat satuan via POST /diklats
+              for (const it of groupItems) {
+                try {
+                  await api.post('/diklats', {
+                    year,
+                    name: it.name,
+                    programIds: [pid],
+                  })
+                  createdTotal++
+                } catch (singleErr) {
+                  console.error('Gagal buat diklat:', it.name, singleErr)
+                }
+              }
+            }
+          }
+          toast.success('Import Berhasil', `${createdTotal} diklat berhasil diimpor ke masing-masing program.`, 7000)
+        } else {
+          throw importErr
+        }
+      }
       setImportConfirmOpen(false)
       setImportOpen(false)
       await load()
