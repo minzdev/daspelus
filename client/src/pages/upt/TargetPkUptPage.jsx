@@ -482,6 +482,27 @@ export default function TargetPkUptPage() {
     setImportOpen(true)
   }
 
+  function getCellStr(cell) {
+    if (!cell) return ''
+    const v = cell.value
+    if (v === null || v === undefined) return ''
+    if (typeof v === 'object') {
+      if (v.text !== undefined) return String(v.text).trim()
+      if (v.result !== undefined) return String(v.result).trim()
+      if (Array.isArray(v.richText)) return v.richText.map((t) => t.text).join('').trim()
+      return String(v).trim()
+    }
+    return String(v).trim()
+  }
+
+  function parseTargetNum(val) {
+    if (val === null || val === undefined) return 0
+    const s = String(typeof val === 'object' ? (val.result ?? val.text ?? '') : val).trim()
+    if (!s) return 0
+    const cleaned = s.replace(/[^0-9]/g, '')
+    return Math.max(0, parseInt(cleaned, 10) || 0)
+  }
+
   async function handleFileSelect(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -495,68 +516,128 @@ export default function TargetPkUptPage() {
       const ws = wb.worksheets[0]
       if (!ws) throw new Error('File Excel tidak memiliki worksheet.')
 
-      let headerRowIdx = -1
-      let colMap = { no: -1, prog: -1, name: -1, target: -1 }
-
-      ws.eachRow((row, rowNumber) => {
-        if (headerRowIdx !== -1) return
-        const vals = (row.values || []).map((v) => String(v || '').trim().toLowerCase())
-        vals.forEach((txt, colIdx) => {
-          if (!txt) return
-          if (txt === 'no' || txt === 'nomor') colMap.no = colIdx
-          else if (txt.includes('program') || txt.includes('induk')) colMap.prog = colIdx
-          else if (txt.includes('nama') || txt.includes('diklat')) colMap.name = colIdx
-          else if (txt.includes('target') || txt.includes('pk')) colMap.target = colIdx
-        })
-        if (colMap.name !== -1 || colMap.prog !== -1) {
-          headerRowIdx = rowNumber
-        }
-      })
-
-      if (headerRowIdx === -1) {
-        headerRowIdx = 4
-        colMap = { no: 1, prog: 2, name: 3, target: 4 }
-      }
-
       const parsed = []
-      let skipped = 0
+      let skippedCount = 0
+      let activeProgram = null
 
       ws.eachRow((row, rowNumber) => {
-        if (rowNumber <= headerRowIdx) return
-        const getVal = (col) => {
-          if (!col || col === -1) return ''
-          const cell = row.getCell(col)
-          return cell && cell.value !== undefined ? String(cell.value).trim() : ''
-        }
+        const c1 = getCellStr(row.getCell(1))
+        const c2 = getCellStr(row.getCell(2))
+        const c3 = getCellStr(row.getCell(3))
+        const c4 = getCellStr(row.getCell(4))
+        const c5 = getCellStr(row.getCell(5))
 
-        const progRaw = getVal(colMap.prog)
-        const nameRaw = getVal(colMap.name)
-        const targetRaw = getVal(colMap.target)
+        const low1 = c1.toLowerCase()
+        const low2 = c2.toLowerCase()
+        const low3 = c3.toLowerCase()
+        const low4 = c4.toLowerCase()
 
-        const matchedProg = matchProgramClient(progRaw)
-        const targetVal = Math.max(0, parseInt(targetRaw.replace(/[^0-9]/g, ''), 10) || 0)
-
-        if (!nameRaw && !matchedProg) {
-          skipped++
+        // Lewati baris judul template atau petunjuk
+        if (
+          low1.includes('template import') || low2.includes('template import') ||
+          low1.includes('petunjuk:') || low2.includes('petunjuk:') ||
+          low1.includes('peringatan') || low2.includes('peringatan')
+        ) {
           return
         }
 
-        parsed.push({
-          rowNum: rowNumber,
-          rawProg: progRaw,
-          programId: matchedProg ? matchedProg.id : '',
-          programName: matchedProg ? matchedProg.name : (progRaw || '—'),
-          name: nameRaw,
-          target: targetVal,
-        })
+        // Lewati baris header tabel
+        if (
+          low2 === 'program tujuan' || low3 === 'nama diklat' || low4 === 'target pk' ||
+          low2 === 'nama diklat' || low3 === 'target pk' ||
+          low1 === 'no' || low1 === 'nomor' ||
+          (low2.startsWith('contoh:') && low3.startsWith('contoh:'))
+        ) {
+          skippedCount += 1
+          return
+        }
+
+        // Pola 1: Template Resmi 4 Kolom (Kolom 1: No, Kolom 2: Program, Kolom 3: Nama Diklat, Kolom 4: Target PK)
+        if (c2 && c3) {
+          const matchedProg = matchProgramClient(c2)
+          if (matchedProg) {
+            const dName = c3.length > 150 ? c3.slice(0, 150) : c3
+            const target = parseTargetNum(row.getCell(4).value ?? c4)
+            parsed.push({
+              rowNum: rowNumber,
+              name: dName,
+              programId: matchedProg.id,
+              programName: matchedProg.name,
+              target,
+            })
+            return
+          }
+        }
+
+        // Pola 2: Format 3 Kolom (Kolom 1: Program, Kolom 2: Nama Diklat, Kolom 3: Target PK)
+        if (c1 && c2 && isNaN(Number(c2))) {
+          const matchedProg = matchProgramClient(c1)
+          if (matchedProg) {
+            const target = parseTargetNum(row.getCell(3).value ?? c3)
+            parsed.push({
+              rowNum: rowNumber,
+              name: c2.slice(0, 150),
+              programId: matchedProg.id,
+              programName: matchedProg.name,
+              target,
+            })
+            return
+          }
+        }
+
+        // Pola 3: Format Grouping / Laptah (Judul program berdiri sendiri di baris terpisah)
+        const possibleProgMatch = matchProgramClient(c2 || c1)
+        if (possibleProgMatch && (!c3 || isNaN(Number(c3))) && !c4) {
+          activeProgram = possibleProgMatch
+          skippedCount += 1
+          return
+        }
+
+        // Baris anak di bawah activeProgram
+        const possibleDiklatName = c2 || c3 || c1
+        if (activeProgram && possibleDiklatName) {
+          const low = possibleDiklatName.toLowerCase()
+          if (
+            low === 'no' || low === 'nama' || low.includes('total') || low.includes('jumlah') ||
+            low.startsWith('politeknik') || low.startsWith('balai') || low.startsWith('sekolah')
+          ) {
+            skippedCount += 1
+            return
+          }
+          const target = parseTargetNum(row.getCell(4).value ?? row.getCell(3).value ?? row.getCell(5).value ?? c4 ?? c3 ?? c5)
+          parsed.push({
+            rowNum: rowNumber,
+            name: possibleDiklatName.slice(0, 150),
+            programId: activeProgram.id,
+            programName: activeProgram.name,
+            target,
+          })
+          return
+        }
+
+        skippedCount += 1
       })
 
-      if (!parsed.length) {
-        throw new Error('Tidak ada baris data yang terbaca dari file Excel.')
+      // Dedup per nama diklat + program
+      const uniqueItems = []
+      const seenKey = new Set()
+      let dupCount = 0
+      for (const item of parsed) {
+        const k = `${item.name.toLowerCase()}|${item.programId || ''}`
+        if (seenKey.has(k)) {
+          dupCount += 1
+          continue
+        }
+        seenKey.add(k)
+        uniqueItems.push(item)
       }
 
-      setImportParsedItems(parsed)
-      setImportSkippedCount(skipped)
+      if (!uniqueItems.length) {
+        throw new Error('Tidak ada baris data diklat yang terbaca dari file Excel. Pastikan mengisi kolom PROGRAM TUJUAN, NAMA DIKLAT, dan TARGET PK.')
+      }
+
+      setImportParsedItems(uniqueItems)
+      setImportSkippedCount(skippedCount + dupCount)
       setImportStep(2)
     } catch (err) {
       console.error(err)
