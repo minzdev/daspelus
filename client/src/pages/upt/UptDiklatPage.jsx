@@ -195,8 +195,32 @@ export default function UptDiklatPage() {
     if (!selectedIds.length) return
     setBulkDeleting(true)
     try {
-      const { data } = await api.post('/diklats/bulk-delete', { ids: selectedIds, year })
-      toast.success('Berhasil dihapus', data.message || `${selectedIds.length} diklat berhasil dihapus.`)
+      try {
+        const { data } = await api.post('/diklats/bulk-delete', { ids: selectedIds, year })
+        toast.success('Berhasil dihapus', data.message || `${selectedIds.length} diklat berhasil dihapus.`)
+      } catch (endpointErr) {
+        if (endpointErr.response?.status === 404) {
+          // Fallback cerdas: hapus satu per satu via endpoint DELETE /diklats/:id
+          let count = 0
+          const BATCH_SIZE = 5
+          for (let i = 0; i < selectedIds.length; i += BATCH_SIZE) {
+            const chunk = selectedIds.slice(i, i + BATCH_SIZE)
+            await Promise.all(
+              chunk.map(async (id) => {
+                try {
+                  await api.delete(`/diklats/${id}`)
+                  count++
+                } catch (e) {
+                  console.error('Gagal hapus id:', id, e)
+                }
+              })
+            )
+          }
+          toast.success('Berhasil dihapus', `${count} diklat terpilih berhasil dihapus.`)
+        } else {
+          throw endpointErr
+        }
+      }
       setSelectedIds([])
       setBulkDeleteConfirmOpen(false)
       await load()
@@ -210,8 +234,38 @@ export default function UptDiklatPage() {
   async function handleDeleteAll() {
     setBulkDeleting(true)
     try {
-      const { data } = await api.post('/diklats/delete-all', { year })
-      toast.success('Berhasil dihapus', data.message || `Seluruh diklat tahun ${year} berhasil dihapus.`)
+      try {
+        const { data } = await api.post('/diklats/delete-all', { year })
+        toast.success('Berhasil dihapus', data.message || `Seluruh diklat tahun ${year} berhasil dihapus.`)
+      } catch (endpointErr) {
+        if (endpointErr.response?.status === 404) {
+          // Fallback cerdas: hapus semua yang ada di list diklats saat ini
+          const allTargetIds = diklats.map((d) => d.id).filter(Boolean)
+          if (!allTargetIds.length) {
+            toast.info('Tidak ada diklat untuk dihapus.')
+            setDeleteAllConfirmOpen(false)
+            return
+          }
+          let count = 0
+          const BATCH_SIZE = 5
+          for (let i = 0; i < allTargetIds.length; i += BATCH_SIZE) {
+            const chunk = allTargetIds.slice(i, i + BATCH_SIZE)
+            await Promise.all(
+              chunk.map(async (id) => {
+                try {
+                  await api.delete(`/diklats/${id}`)
+                  count++
+                } catch (e) {
+                  console.error('Gagal hapus id:', id, e)
+                }
+              })
+            )
+          }
+          toast.success('Berhasil dihapus', `Seluruh diklat (${count}) tahun ${year} berhasil dihapus.`)
+        } else {
+          throw endpointErr
+        }
+      }
       setSelectedIds([])
       setDeleteAllConfirmOpen(false)
       await load()
