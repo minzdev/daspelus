@@ -805,7 +805,7 @@ export default function TargetPkUptPage() {
               <p className="text-xs text-slate-500 mt-1">Rincian nama diklat tahun {year}</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <IconBookOpen className="h-6 w-6" />
+              <IconFileText className="h-6 w-6" />
             </div>
           </div>
         </div>
@@ -1113,7 +1113,7 @@ export default function TargetPkUptPage() {
                 <input type="file" accept=".xlsx,.xls" className="hidden" id="excelTargetInput" onChange={handleFileSelect} />
                 <label htmlFor="excelTargetInput" className="cursor-pointer flex flex-col items-center gap-2">
                   <div className="h-14 w-14 rounded-2xl bg-navy-50 text-navy-800 flex items-center justify-center mb-1">
-                    <IconUpload className="h-7 w-7" />
+                    <IconFileText className="h-7 w-7" />
                   </div>
                   <p className="font-extrabold text-sm text-slate-800">Klik di sini untuk memilih file Excel Target PK</p>
                   <p className="text-xs text-slate-500">Mendukung format .xlsx atau .xls (template DASPESLUS)</p>
