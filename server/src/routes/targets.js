@@ -3,7 +3,7 @@ const { authenticate, requireAdmin, requireUpt, isSuperAdmin, isPusbang, isPimpi
 const { Target, TargetSubmission, Program, Upt, Submission, Realization, Diklat } = require("../models");
 const { audit } = require("../lib/audit");
 const notifier = require("../lib/notifier");
-const { Op } = require("sequelize");
+const { Op, where, fn, col } = require("sequelize");
 
 const router = express.Router();
 
@@ -560,18 +560,48 @@ router.post("/import", requireUpt, async (req, res) => {
       const byClean = allPrograms.find((p) => p.name.toLowerCase().trim() === clean);
       if (byClean) return byClean.id;
 
-      const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan');
+      // 4. Spesifik "Pola Pembibitan" (HARUS MURNI, BUKAN Non Pola / Mandiri)
+      const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan') && !clean.includes('mandiri');
       if (isPolaMurni) {
-        const pola = allPrograms.find((p) => p.name.toLowerCase().includes('pola pembibitan') && !p.name.toLowerCase().includes('non'));
+        const pola = allPrograms.find((p) => {
+          const pn = p.name.toLowerCase().trim();
+          return pn.includes('pola pembibitan') && !pn.includes('non') && !pn.includes('mandiri');
+        });
         if (pola) return pola.id;
       }
 
+      // 5. Spesifik "Mandiri" atau "Non Pola Pembibitan"
       const isMandiriOrNonPola = clean.includes('mandiri') || clean.includes('non pola') || clean.includes('non-pola');
       if (isMandiriOrNonPola) {
-        const nonPola = allPrograms.find((p) => p.name.toLowerCase().includes('mandiri') || p.name.toLowerCase().includes('non pola') || p.name.toLowerCase().includes('non-pola'));
+        if (clean.includes('mandiri')) {
+          const mandiri = allPrograms.find((p) => p.name.toLowerCase().includes('mandiri'));
+          if (mandiri) return mandiri.id;
+        }
+        const nonPola = allPrograms.find((p) => {
+          const pn = p.name.toLowerCase().trim();
+          return pn.includes('mandiri') || pn.includes('non pola') || pn.includes('non-pola');
+        });
         if (nonPola) return nonPola.id;
       }
 
+      // 6. Spesifik "Pelatihan Teknis" / "Short Course"
+      const isPelatihanTeknis = clean.includes('pelatihan teknis') || clean.includes('short course') || clean === 'teknis';
+      if (isPelatihanTeknis) {
+        // Prioritaskan yang leaf / turunan bila ada, atau yang mengandung pelatihan teknis
+        const teknisLeaf = allPrograms.find((p) => {
+          const pn = p.name.toLowerCase().trim();
+          return (pn.includes('pelatihan teknis') || pn.includes('short course')) && p.parentId;
+        });
+        if (teknisLeaf) return teknisLeaf.id;
+
+        const teknisAny = allPrograms.find((p) => {
+          const pn = p.name.toLowerCase().trim();
+          return pn.includes('pelatihan teknis') || pn.includes('short course');
+        });
+        if (teknisAny) return teknisAny.id;
+      }
+
+      // 7. Partial contains match (prioritaskan yang lebih panjang & spesifik)
       const candidates = allPrograms
         .filter((p) => {
           const pn = p.name.toLowerCase().trim();
@@ -579,6 +609,13 @@ router.post("/import", requireUpt, async (req, res) => {
         })
         .sort((a, b) => b.name.length - a.name.length);
       if (candidates.length > 0) return candidates[0].id;
+
+      // 8. Match parentName jika input mencantumkan nama induk
+      const byParent = allPrograms.find((p) => {
+        const prn = (p.parentName || p.parent_name || '').toLowerCase().trim();
+        return prn && (prn === clean || clean.includes(prn));
+      });
+      if (byParent) return byParent.id;
 
       return null;
     }
@@ -595,9 +632,21 @@ router.post("/import", requireUpt, async (req, res) => {
       if (!pid || !progMap.has(pid)) continue;
 
       if (rawName) {
-        let doc = await Diklat.findOne({
+        // Cari diklat yang namanya sama
+        const existingDocs = await Diklat.findAll({
           where: { uptId, year: y, [Op.and]: [where(fn("LOWER", col("name")), rawName.toLowerCase())] }
         });
+
+        // Cari yang programIds-nya SUDAH mengandung pid ini
+        let doc = existingDocs.find((d) => {
+          const pids = Array.isArray(d.programIds) ? d.programIds.map(String) : [];
+          return pids.includes(String(pid));
+        });
+
+        if (!doc && existingDocs.length === 1 && (!existingDocs[0].programIds || existingDocs[0].programIds.length === 0)) {
+          doc = existingDocs[0];
+        }
+
         if (!doc) {
           const tbp = { [String(pid)]: { targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal } };
           doc = await Diklat.create({
@@ -635,7 +684,9 @@ router.post("/import", requireUpt, async (req, res) => {
         const key = String(p);
         const cur = progSum.get(key) || { tp: 0, tl: 0 };
         const pv = tbp[key];
-        const val = (pv && pv.targetPeserta !== undefined) ? Number(pv.targetPeserta) : (Number(d.targetPeserta) || 0);
+        const val = (pv && (pv.targetPeserta !== undefined || pv.targetPk !== undefined))
+          ? Number(pv.targetPk ?? pv.targetPeserta)
+          : (ids.length === 1 ? (Number(d.targetPeserta) || 0) : 0);
         cur.tp += val;
         cur.tl += val;
         progSum.set(key, cur);

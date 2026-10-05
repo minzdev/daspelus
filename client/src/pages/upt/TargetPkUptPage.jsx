@@ -185,25 +185,25 @@ export default function TargetPkUptPage() {
     return '0'
   }
 
-  // Nilai program: INDUK = auto-sum turunan; TURUNAN ber-diklat = auto-sum diklat; TURUNAN tanpa diklat = input langsung
+  // Nilai program: INDUK = auto-sum turunan (+ diklat langsung bila ada); TURUNAN ber-diklat = auto-sum diklat; TURUNAN tanpa diklat = input langsung
   function progVal(pid, _seen = new Set()) {
     if (_seen.has(pid)) return '0'
     _seen.add(pid)
+    let total = 0
     if (parentsWithChildren.has(pid)) {
       const kids = childIdsByParent.get(pid) || []
-      const total = kids.reduce((s, kid) => s + (Number(progVal(kid, new Set(_seen))) || 0), 0)
-      return String(total)
+      total += kids.reduce((s, kid) => s + (Number(progVal(kid, new Set(_seen))) || 0), 0)
     }
-    const f = progForm[pid]
-    if (f !== undefined && String(f).trim() !== '') return String(f).trim()
-    const saved = itemsByPid.get(pid)
-    const hasDiklat = (diklatByProgram.get(pid) || []).length > 0
-    if (hasDiklat) {
-      const list = diklatByProgram.get(pid) || []
-      return String(list.reduce((s, d) => s + (Number(diklatVal(pid, d.id)) || 0), 0))
+    const list = diklatByProgram.get(pid) || []
+    if (list.length > 0) {
+      total += list.reduce((s, d) => s + (Number(diklatVal(pid, d.id)) || 0), 0)
+    } else if (!parentsWithChildren.has(pid)) {
+      const f = progForm[pid]
+      if (f !== undefined && String(f).trim() !== '') return String(f).trim()
+      const saved = itemsByPid.get(pid)
+      if (saved) return String(saved.targetPeserta || saved.targetLulusan || 0)
     }
-    if (saved) return String(saved.targetPeserta || saved.targetLulusan || 0)
-    return '0'
+    return String(total)
   }
 
   function openModal() {
@@ -219,7 +219,7 @@ export default function TargetPkUptPage() {
       tot += Number(progVal(p.id)) || 0
     }
     return tot
-  }, [leafPrograms, diklatForm, progForm, diklats, myTarget]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [leafPrograms, diklatForm, progForm, diklats, myTarget, diklatByProgram]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e, andSend = false) {
     if (e) e.preventDefault()
@@ -338,6 +338,8 @@ export default function TargetPkUptPage() {
   // ─────────────────────────────────────────────────────────────
   // FITUR EXCEL: DOWNLOAD TEMPLATE & IMPORT TARGET PK
   // ─────────────────────────────────────────────────────────────
+  // FITUR EXCEL: DOWNLOAD TEMPLATE & IMPORT TARGET PK
+  // ─────────────────────────────────────────────────────────────
   function matchProgramClient(inputName) {
     if (!inputName || !programs.length) return null
     const raw = String(inputName).trim()
@@ -357,11 +359,11 @@ export default function TargetPkUptPage() {
     if (byClean) return byClean
 
     // 4. Spesifik "Pola Pembibitan" (HARUS MURNI, BUKAN Non Pola / Mandiri)
-    const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan')
+    const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan') && !clean.includes('mandiri')
     if (isPolaMurni) {
       const pola = programs.find((p) => {
         const pn = normalizeProgString(p.name)
-        return pn.includes('pola pembibitan') && !pn.includes('non')
+        return pn.includes('pola pembibitan') && !pn.includes('non') && !pn.includes('mandiri')
       })
       if (pola) return pola
     }
@@ -369,6 +371,13 @@ export default function TargetPkUptPage() {
     // 5. Spesifik "Mandiri" atau "Non Pola Pembibitan"
     const isMandiriOrNonPola = clean.includes('mandiri') || clean.includes('non pola') || clean.includes('non-pola')
     if (isMandiriOrNonPola) {
+      if (clean.includes('mandiri')) {
+        const mandiri = programs.find((p) => {
+          const pn = normalizeProgString(p.name)
+          return pn.includes('mandiri')
+        })
+        if (mandiri) return mandiri
+      }
       const nonPola = programs.find((p) => {
         const pn = normalizeProgString(p.name)
         return pn.includes('mandiri') || pn.includes('non pola') || pn.includes('non-pola')
@@ -376,7 +385,23 @@ export default function TargetPkUptPage() {
       if (nonPola) return nonPola
     }
 
-    // 6. Partial contains match (prioritaskan yang lebih panjang & spesifik)
+    // 6. Spesifik "Pelatihan Teknis" / "Short Course"
+    const isPelatihanTeknis = clean.includes('pelatihan teknis') || clean.includes('short course') || clean === 'teknis'
+    if (isPelatihanTeknis) {
+      const teknisLeaf = programs.find((p) => {
+        const pn = normalizeProgString(p.name)
+        return (pn.includes('pelatihan teknis') || pn.includes('short course')) && !parentsWithChildren.has(p.id)
+      })
+      if (teknisLeaf) return teknisLeaf
+
+      const teknisAny = programs.find((p) => {
+        const pn = normalizeProgString(p.name)
+        return pn.includes('pelatihan teknis') || pn.includes('short course')
+      })
+      if (teknisAny) return teknisAny
+    }
+
+    // 7. Partial contains match (prioritaskan yang lebih panjang & spesifik)
     const candidates = programs
       .filter((p) => {
         const pn = normalizeProgString(p.name)
@@ -386,7 +411,7 @@ export default function TargetPkUptPage() {
 
     if (candidates.length > 0) return candidates[0]
 
-    // 7. Match parentName jika input mencantumkan nama induk
+    // 8. Match parentName jika input mencantumkan nama induk
     const byParent = programs.find((p) => {
       const prn = normalizeProgString(p.parentName || p.parent_name)
       return prn && (prn === clean || clean.includes(prn))
@@ -696,20 +721,25 @@ export default function TargetPkUptPage() {
             const rawName = String(it.name || '').trim()
             const tVal = Number(it.target) || 0
             if (rawName) {
-              // Cari diklat yang sudah ada
-              let existing = diklats.find((d) => d.name.trim().toLowerCase() === rawName.toLowerCase())
+              // Cari diklat yang sudah ada dengan program yang sama
+              let existing = diklats.find((d) => d.name.trim().toLowerCase() === rawName.toLowerCase() && (d.programIds || []).map(String).includes(String(it.programId)))
               let dId = existing ? existing.id : null
               if (!dId) {
-                // Buat diklat dulu
-                try {
-                  const created = await api.post('/diklats', {
-                    year,
-                    name: rawName,
-                    programIds: [it.programId],
-                  })
-                  dId = created.data?.id
-                } catch (e) {
-                  console.error('Gagal create diklat saat fallback:', e)
+                let sameNameAny = diklats.find((d) => d.name.trim().toLowerCase() === rawName.toLowerCase())
+                if (sameNameAny) {
+                  dId = sameNameAny.id
+                } else {
+                  // Buat diklat dulu
+                  try {
+                    const created = await api.post('/diklats', {
+                      year,
+                      name: rawName,
+                      programIds: [it.programId],
+                    })
+                    dId = created.data?.id
+                  } catch (e) {
+                    console.error('Gagal create diklat saat fallback:', e)
+                  }
                 }
               }
               if (dId) {
@@ -782,7 +812,20 @@ export default function TargetPkUptPage() {
     )
   }
 
-  const totalTargetPk = myTarget?.targetPeserta || myTarget?.targetLulusan || 0
+  const totalTargetPk = useMemo(() => {
+    let sum = 0
+    for (const g of parentGroups) {
+      if (g.parentId && (!g.children || g.children.length === 0)) {
+        sum += Number(progVal(g.parentId)) || 0
+      } else {
+        for (const child of g.children) {
+          sum += Number(progVal(child.id)) || 0
+        }
+      }
+    }
+    if (sum > 0) return sum
+    return myTarget?.targetPeserta || myTarget?.targetLulusan || 0
+  }, [parentGroups, diklatForm, progForm, diklats, myTarget, diklatByProgram, childIdsByParent, parentsWithChildren])
   const hasAny = (myTarget?.items || []).length > 0 || totalTargetPk > 0
   const totalProgramsCount = (myTarget?.items || []).filter((i) => (Number(i.targetPeserta) || Number(i.targetLulusan) || 0) > 0).length
 
@@ -1034,8 +1077,13 @@ export default function TargetPkUptPage() {
                   // ── Baris TURUNAN + rincian diklat ──
                   for (const child of g.children) {
                     const it = itemsByPid.get(child.id)
-                    const pkVal = (it?.targetPeserta ?? Number(progVal(child.id))) || 0
                     const rincian = (diklatByProgram.get(child.id) || []).filter((d) => d)
+                    const sumDiklat = rincian.reduce((s, d) => {
+                      const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
+                      const dPk = (tbp && (tbp.targetPk !== undefined || tbp.targetPeserta !== undefined)) ? (tbp.targetPk ?? tbp.targetPeserta) : (d.targetPeserta || 0)
+                      return s + (Number(dPk) || 0)
+                    }, 0)
+                    const pkVal = rincian.length > 0 ? sumDiklat : ((it?.targetPeserta ?? Number(progVal(child.id))) || 0)
                     rows.push(
                       <tr key={child.id} className="hover:bg-slate-50/60 align-top">
                         <td className="px-5 py-4">
@@ -1245,12 +1293,38 @@ export default function TargetPkUptPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">Pratinjau Data ({importParsedItems.length} baris terbaca)</h4>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                    Pratinjau Data ({importParsedItems.length} baris terbaca — Total Target PK: {fmtNum(importParsedItems.reduce((s, it) => s + (Number(it.target) || 0), 0))})
+                  </h4>
                   <p className="text-xs text-slate-500">Periksa pencocokan program tujuan dan angka target sebelum disimpan.</p>
                 </div>
                 <button type="button" onClick={() => setImportStep(1)} className="text-xs font-bold text-slate-500 hover:text-slate-800 underline">
                   Ganti File Excel
                 </button>
+              </div>
+
+              {/* Ringkasan per program yang terbaca */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {Array.from(
+                  importParsedItems.reduce((map, it) => {
+                    const k = it.programName || 'Program Lainnya'
+                    const cur = map.get(k) || { name: k, count: 0, total: 0 }
+                    cur.count += 1
+                    cur.total += Number(it.target) || 0
+                    map.set(k, cur)
+                    return map
+                  }, new Map()).values()
+                ).map((progSum, i) => (
+                  <div key={i} className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                    <div className="min-w-0 pr-2">
+                      <p className="text-[11px] font-bold text-slate-700 truncate">{progSum.name}</p>
+                      <p className="text-[10px] text-slate-500">{progSum.count} diklat</p>
+                    </div>
+                    <span className="text-xs font-black text-navy-950 bg-white border border-slate-200 px-2 py-0.5 rounded-lg tabular-nums">
+                      {fmtNum(progSum.total)}
+                    </span>
+                  </div>
+                ))}
               </div>
 
               <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100 text-xs">

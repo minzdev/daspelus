@@ -140,11 +140,11 @@ function resolveProgramIdFromInput(input, allPrograms) {
   if (byClean) return byClean.id;
 
   // 4. Spesifik "Pola Pembibitan" (HARUS MURNI, BUKAN Non Pola / Mandiri)
-  const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan');
+  const isPolaMurni = (clean.includes('pola pembibitan') || clean === 'pola') && !clean.includes('non') && !clean.includes('bukan') && !clean.includes('mandiri');
   if (isPolaMurni) {
     const pola = allPrograms.find((p) => {
       const pn = normalizeProgString(p.name);
-      return pn.includes('pola pembibitan') && !pn.includes('non');
+      return pn.includes('pola pembibitan') && !pn.includes('non') && !pn.includes('mandiri');
     });
     if (pola) return pola.id;
   }
@@ -152,6 +152,10 @@ function resolveProgramIdFromInput(input, allPrograms) {
   // 5. Spesifik "Mandiri" atau "Non Pola Pembibitan"
   const isMandiriOrNonPola = clean.includes('mandiri') || clean.includes('non pola') || clean.includes('non-pola');
   if (isMandiriOrNonPola) {
+    if (clean.includes('mandiri')) {
+      const mandiri = allPrograms.find((p) => p.name.toLowerCase().includes('mandiri'));
+      if (mandiri) return mandiri.id;
+    }
     const nonPola = allPrograms.find((p) => {
       const pn = normalizeProgString(p.name);
       return pn.includes('mandiri') || pn.includes('non pola') || pn.includes('non-pola');
@@ -159,7 +163,23 @@ function resolveProgramIdFromInput(input, allPrograms) {
     if (nonPola) return nonPola.id;
   }
 
-  // 6. Partial contains match (prioritaskan yang lebih panjang & spesifik)
+  // 6. Spesifik "Pelatihan Teknis" / "Short Course"
+  const isPelatihanTeknis = clean.includes('pelatihan teknis') || clean.includes('short course') || clean === 'teknis';
+  if (isPelatihanTeknis) {
+    const teknisLeaf = allPrograms.find((p) => {
+      const pn = p.name.toLowerCase().trim();
+      return (pn.includes('pelatihan teknis') || pn.includes('short course')) && p.parentId;
+    });
+    if (teknisLeaf) return teknisLeaf.id;
+
+    const teknisAny = allPrograms.find((p) => {
+      const pn = p.name.toLowerCase().trim();
+      return pn.includes('pelatihan teknis') || pn.includes('short course');
+    });
+    if (teknisAny) return teknisAny.id;
+  }
+
+  // 7. Partial contains match (prioritaskan yang lebih panjang & spesifik)
   const candidates = allPrograms
     .filter((p) => {
       const pn = normalizeProgString(p.name);
@@ -169,7 +189,7 @@ function resolveProgramIdFromInput(input, allPrograms) {
 
   if (candidates.length > 0) return candidates[0].id;
 
-  // 7. Match parentName jika input mencantumkan nama induk
+  // 8. Match parentName jika input mencantumkan nama induk
   const byParent = allPrograms.find((p) => {
     const prn = normalizeProgString(p.parentName || p.parent_name);
     return prn && (prn === clean || clean.includes(prn));
@@ -253,13 +273,21 @@ router.post("/import", requireUpt, async (req, res) => {
         continue;
       }
 
-      const tp = Math.max(0, parseInt(item.targetPeserta, 10) || 0);
-      const tl = Math.max(0, parseInt(item.targetLulusan, 10) || 0);
+      const tp = Math.max(0, parseInt(item.targetPeserta ?? item.targetPk ?? item.target, 10) || 0);
+      const tl = Math.max(0, parseInt(item.targetLulusan ?? item.targetPk ?? item.target, 10) || 0);
 
       // Cek apakah diklat dengan nama sama sudah ada di UPT tahun ini
-      const existing = await Diklat.findOne({
+      const existingDocs = await Diklat.findAll({
         where: { uptId, year, [Op.and]: [where(fn("LOWER", col("name")), lower)] },
       });
+
+      let existing = existingDocs.find((d) => {
+        const cur = Array.isArray(d.programIds) ? d.programIds.map(String) : [];
+        return validPids.some((vp) => cur.includes(vp));
+      });
+      if (!existing && existingDocs.length === 1 && (!existingDocs[0].programIds || existingDocs[0].programIds.length === 0)) {
+        existing = existingDocs[0];
+      }
 
       if (existing) {
         // Update pemetaan program jika ada program baru
