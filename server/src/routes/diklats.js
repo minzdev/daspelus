@@ -344,6 +344,76 @@ router.post("/import", requireUpt, async (req, res) => {
   }
 });
 
+/** POST/DELETE /api/diklats/bulk-delete (atau /bulk) — (UPT) hapus banyak diklat yang ditandai */
+const handleBulkDelete = async (req, res) => {
+  try {
+    const uptId = req.user.uptId;
+    if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
+    const ids = req.body?.ids || req.query?.ids;
+    const year = req.body?.year || req.query?.year;
+    const y = Number(year) || new Date().getFullYear();
+
+    const idList = Array.isArray(ids) ? ids : (typeof ids === "string" ? ids.split(",").filter(Boolean) : []);
+
+    if (!idList.length) {
+      return res.status(400).json({ error: "Pilih minimal 1 diklat untuk dihapus." });
+    }
+
+    const tSid = `${uptId}_${y}_00`;
+    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
+    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Tidak dapat menghapus diklat.` });
+    }
+
+    const count = await Diklat.destroy({
+      where: {
+        id: { [Op.in]: idList },
+        uptId,
+        year: y,
+      },
+    });
+
+    audit(req, "BULK_DELETE_DIKLAT", "diklat", null, { year: y, count, idsCount: idList.length });
+    res.json({ message: `${count} diklat terpilih berhasil dihapus.`, count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gagal menghapus diklat terpilih: " + (err.message || err) });
+  }
+};
+router.post("/bulk-delete", requireUpt, handleBulkDelete);
+router.delete("/bulk-delete", requireUpt, handleBulkDelete);
+router.post("/bulk", requireUpt, handleBulkDelete);
+router.delete("/bulk", requireUpt, handleBulkDelete);
+
+/** POST/DELETE /api/diklats/delete-all (atau /all) — (UPT) hapus seluruh diklat tahun ini */
+const handleDeleteAll = async (req, res) => {
+  try {
+    const uptId = req.user.uptId;
+    if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
+    const y = Number(req.body?.year || req.query?.year) || new Date().getFullYear();
+
+    const tSid = `${uptId}_${y}_00`;
+    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
+    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Tidak dapat menghapus diklat.` });
+    }
+
+    const count = await Diklat.destroy({
+      where: { uptId, year: y },
+    });
+
+    audit(req, "DELETE_ALL_DIKLAT", "diklat", null, { year: y, count });
+    res.json({ message: `Seluruh diklat (${count}) tahun ${y} berhasil dihapus.`, count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gagal menghapus seluruh diklat: " + (err.message || err) });
+  }
+};
+router.post("/delete-all", requireUpt, handleDeleteAll);
+router.delete("/delete-all", requireUpt, handleDeleteAll);
+router.post("/all", requireUpt, handleDeleteAll);
+router.delete("/all", requireUpt, handleDeleteAll);
+
 /** PUT /api/diklats/:id — (UPT) ubah nama / pemetaan program */
 router.put("/:id", requireUpt, async (req, res) => {
   try {
@@ -410,65 +480,6 @@ router.delete("/:id", requireUpt, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Gagal menghapus diklat." });
-  }
-});
-
-/** POST /api/diklats/bulk-delete — (UPT) hapus banyak diklat yang ditandai */
-router.post("/bulk-delete", requireUpt, async (req, res) => {
-  try {
-    const uptId = req.user.uptId;
-    if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
-    const { ids, year } = req.body;
-    const y = Number(year) || new Date().getFullYear();
-
-    if (!Array.isArray(ids) || !ids.length) {
-      return res.status(400).json({ error: "Pilih minimal 1 diklat untuk dihapus." });
-    }
-
-    const tSid = `${uptId}_${y}_00`;
-    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
-    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
-      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Tidak dapat menghapus diklat.` });
-    }
-
-    const count = await Diklat.destroy({
-      where: {
-        id: { [Op.in]: ids },
-        uptId,
-        year: y,
-      },
-    });
-
-    audit(req, "BULK_DELETE_DIKLAT", "diklat", null, { year: y, count, idsCount: ids.length });
-    res.json({ message: `${count} diklat terpilih berhasil dihapus.`, count });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gagal menghapus diklat terpilih: " + (err.message || err) });
-  }
-});
-
-/** POST /api/diklats/delete-all — (UPT) hapus seluruh diklat tahun ini */
-router.post("/delete-all", requireUpt, async (req, res) => {
-  try {
-    const uptId = req.user.uptId;
-    if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
-    const y = Number(req.body.year) || new Date().getFullYear();
-
-    const tSid = `${uptId}_${y}_00`;
-    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
-    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
-      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Tidak dapat menghapus diklat.` });
-    }
-
-    const count = await Diklat.destroy({
-      where: { uptId, year: y },
-    });
-
-    audit(req, "DELETE_ALL_DIKLAT", "diklat", null, { year: y, count });
-    res.json({ message: `Seluruh diklat (${count}) tahun ${y} berhasil dihapus.`, count });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gagal menghapus seluruh diklat: " + (err.message || err) });
   }
 });
 
