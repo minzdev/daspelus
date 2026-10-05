@@ -386,12 +386,13 @@ router.put("/my", requireUpt, async (req, res) => {
       if (diklat.uptId !== uptId || Number(diklat.year) !== y) {
         return res.status(403).json({ error: `Diklat "${diklat.name}" bukan milik UPT/tahun ini.` });
       }
-      const tp = Number(dt.targetPeserta);
-      const tl = Number(dt.targetLulusan);
+      const singleTarget = dt.target !== undefined ? dt.target : dt.targetPk;
+      const tp = Number(singleTarget !== undefined ? singleTarget : dt.targetPeserta);
+      const tl = Number(singleTarget !== undefined ? singleTarget : dt.targetLulusan);
       if (!Number.isFinite(tp) || !Number.isFinite(tl) || tp < 0 || tl < 0) {
         return res.status(400).json({ error: `Target diklat "${diklat.name}" harus angka ≥ 0.` });
       }
-      if (tl > tp) {
+      if (tl > tp && singleTarget === undefined) {
         return res.status(400).json({ error: `Diklat "${diklat.name}": Lulusan (${tl}) tidak boleh lebih besar dari Peserta (${tp}).` });
       }
       const dKey = String(diklat.id);
@@ -431,7 +432,11 @@ router.put("/my", requireUpt, async (req, res) => {
     for (const it of items) {
       if (!it.programId) continue;
       let tp, tl;
-      if (Array.isArray(it.months)) {
+      const singleTarget = it.target !== undefined ? it.target : it.targetPk;
+      if (singleTarget !== undefined) {
+        tp = Number(singleTarget);
+        tl = Number(singleTarget);
+      } else if (Array.isArray(it.months)) {
         // kompat lama: jumlahkan months jadi single
         tp = it.months.reduce((s, m) => s + (Number(m.targetPeserta) || 0), 0);
         tl = it.months.reduce((s, m) => s + (Number(m.targetLulusan) || 0), 0);
@@ -444,7 +449,7 @@ router.put("/my", requireUpt, async (req, res) => {
       if (!Number.isFinite(tp) || !Number.isFinite(tl) || tp < 0 || tl < 0) {
         return res.status(400).json({ error: `Target program harus angka ≥ 0.` });
       }
-      if (tl > tp) {
+      if (tl > tp && singleTarget === undefined) {
         const prog = await Program.findByPk(it.programId);
         return res.status(400).json({ error: `"${prog ? prog.name : it.programId}": Lulusan (${tl}) tidak boleh lebih besar dari Peserta (${tp}).` });
       }
@@ -515,6 +520,125 @@ router.put("/my", requireUpt, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Gagal menyimpan target PK." });
+  }
+});
+
+/** POST /api/targets/import — (UPT) import data target PK per diklat/program dari file excel */
+router.post("/import", requireUpt, async (req, res) => {
+  try {
+    const uptId = req.user.uptId;
+    if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
+    const y = Number(req.body.year) || new Date().getFullYear();
+
+    const tSid = `${uptId}_${y}_00`;
+    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
+    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Ajukan Perubahan Target PK untuk merevisi target.` });
+    }
+
+    const rawItems = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!rawItems.length) return res.status(400).json({ error: "Tidak ada baris data target untuk diimpor." });
+
+    const allPrograms = (await Program.findAll()).map((p) => p.toJSON());
+    const progMap = new Map(allPrograms.map((p) => [p.id, p]));
+
+    let updatedCount = 0;
+    let createdCount = 0;
+    const diklatTargets = [];
+    const directItems = [];
+
+    for (const item of rawItems) {
+      const rawName = String(item.name || "").trim();
+      const targetVal = Math.max(0, parseInt(item.target ?? item.targetPk ?? item.targetPeserta, 10) || 0);
+
+      // Cari program
+      let pid = item.programId;
+      if (!pid && item.programName) {
+        const clean = String(item.programName).toLowerCase().trim();
+        const found = allPrograms.find(p => p.id === item.programName || p.name.toLowerCase().trim() === clean || clean.includes(p.name.toLowerCase().trim()));
+        if (found) pid = found.id;
+      }
+      if (!pid || !progMap.has(pid)) continue;
+
+      if (rawName) {
+        let doc = await Diklat.findOne({
+          where: { uptId, year: y, [Op.and]: [where(fn("LOWER", col("name")), rawName.toLowerCase())] }
+        });
+        if (!doc) {
+          const tbp = { [String(pid)]: { targetPeserta: targetVal, targetLulusan: targetVal } };
+          doc = await Diklat.create({
+            uptId, year: y, name: rawName, programIds: [String(pid)],
+            targetPeserta: targetVal, targetLulusan: targetVal,
+            targetByProgram: tbp,
+            isActive: true, createdBy: req.uid,
+          });
+          createdCount++;
+        } else {
+          const curPids = Array.isArray(doc.programIds) ? doc.programIds.map(String) : [];
+          if (!curPids.includes(String(pid))) curPids.push(String(pid));
+          const curTbp = (doc.targetByProgram && typeof doc.targetByProgram === 'object') ? { ...doc.targetByProgram } : {};
+          curTbp[String(pid)] = { targetPeserta: targetVal, targetLulusan: targetVal };
+          let tot = 0;
+          for (const [k, v] of Object.entries(curTbp)) {
+            if (curPids.includes(k)) tot += Number(v?.targetPeserta) || 0;
+          }
+          await doc.update({ programIds: curPids, targetByProgram: curTbp, targetPeserta: tot, targetLulusan: tot });
+          updatedCount++;
+        }
+        diklatTargets.push({ diklatId: doc.id, programId: pid, targetPeserta: targetVal, targetLulusan: targetVal });
+      } else {
+        directItems.push({ programId: pid, targetPeserta: targetVal, targetLulusan: targetVal });
+      }
+    }
+
+    // Hitung ulang target tahunan dan upsert ke Target (month = 0)
+    const allDiklats = await Diklat.findAll({ where: { uptId, year: y } });
+    const progSum = new Map();
+    for (const d of allDiklats) {
+      const ids = Array.isArray(d.programIds) ? d.programIds : [];
+      const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram : {};
+      for (const p of ids) {
+        const key = String(p);
+        const cur = progSum.get(key) || { tp: 0, tl: 0 };
+        const pv = tbp[key];
+        const val = (pv && pv.targetPeserta !== undefined) ? Number(pv.targetPeserta) : (Number(d.targetPeserta) || 0);
+        cur.tp += val;
+        cur.tl += val;
+        progSum.set(key, cur);
+      }
+    }
+    for (const dit of directItems) {
+      const key = String(dit.programId);
+      const hasD = allDiklats.some(d => (Array.isArray(d.programIds) ? d.programIds.map(String) : []).includes(key));
+      if (!hasD) {
+        progSum.set(key, { tp: dit.targetPeserta, tl: dit.targetLulusan });
+      }
+    }
+
+    let savedProgs = 0;
+    for (const [pid, v] of progSum.entries()) {
+      await Target.destroy({ where: { uptId, year: y, programId: pid, month: { [Op.ne]: 0 } } });
+      if (v.tp <= 0) {
+        await Target.destroy({ where: { uptId, year: y, programId: pid, month: 0 } });
+        continue;
+      }
+      await Target.upsert({
+        uptId, year: y, month: 0, programId: pid,
+        targetPeserta: v.tp, targetLulusan: v.tl, isYearly: true, createdBy: req.uid,
+      });
+      savedProgs++;
+    }
+
+    audit(req, "IMPORT_TARGET_PK", "target", `${uptId}_${y}`, { year: y, updated: updatedCount, created: createdCount });
+    res.json({
+      message: `Berhasil import Target PK: ${createdCount} diklat baru dibuat, ${updatedCount} target diklat diperbarui (${savedProgs} program terdata).`,
+      createdCount,
+      updatedCount,
+      totalPrograms: savedProgs,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gagal import Target PK: " + (err.message || err) });
   }
 });
 
