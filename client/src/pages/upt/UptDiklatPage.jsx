@@ -33,11 +33,11 @@ export default function UptDiklatPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  // Import Excel
+  // Import Excel (Multi-Program / Grouping Sekaligus)
   const [importOpen, setImportOpen] = useState(false)
-  const [importProgId, setImportProgId] = useState('')
+  const [defaultFallbackProgId, setDefaultFallbackProgId] = useState('')
   const [importFileName, setImportFileName] = useState('')
-  const [importNames, setImportNames] = useState([])
+  const [importParsedItems, setImportParsedItems] = useState([])
   const [importSkippedFile, setImportSkippedFile] = useState(0)
   const [importParsing, setImportParsing] = useState(false)
   const [importSending, setImportSending] = useState(false)
@@ -157,17 +157,70 @@ export default function UptDiklatPage() {
     }
   }
 
+  function normalizeProgString(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/^[a-z0-9][\.\-\)]\s*/i, '') // hapus awalan A. atau 1.
+      .replace(/\(.*?\)/g, '')              // hapus tanda kurung
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  function matchProgramClient(inputName) {
+    if (!inputName || !programs.length) return null
+    const rawLower = String(inputName).trim().toLowerCase()
+    const clean = normalizeProgString(inputName)
+
+    // 1. Direct ID match
+    const byId = programs.find((p) => String(p.id) === String(inputName))
+    if (byId) return byId
+
+    // 2. Exact Name match
+    const byExact = programs.find((p) => p.name.trim().toLowerCase() === rawLower)
+    if (byExact) return byExact
+
+    // 3. Clean Name match
+    const byClean = programs.find((p) => normalizeProgString(p.name) === clean)
+    if (byClean) return byClean
+
+    // 4. Sinonim umum (Mandiri -> Non Pola Pembibitan)
+    if (clean.includes('mandiri')) {
+      const nonPola = programs.find((p) => {
+        const pn = normalizeProgString(p.name)
+        return pn.includes('non pola') || pn.includes('mandiri')
+      })
+      if (nonPola) return nonPola
+    }
+    if (clean.includes('pola pembibitan')) {
+      const pola = programs.find((p) => normalizeProgString(p.name).includes('pola pembibitan'))
+      if (pola) return pola
+    }
+
+    // 5. Partial contains match
+    const byIncludes = programs.find((p) => {
+      const pn = normalizeProgString(p.name)
+      return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean))
+    })
+    if (byIncludes) return byIncludes
+
+    // 6. Match parentName jika input mencantumkan nama induk
+    const byParent = programs.find((p) => {
+      const prn = normalizeProgString(p.parentName)
+      return prn && (prn === clean || clean.includes(prn))
+    })
+    if (byParent) return byParent
+
+    return null
+  }
+
   function openImport() {
-    setImportProgId('')
+    setDefaultFallbackProgId(leafPrograms[0]?.id || '')
     setImportFileName('')
-    setImportNames([])
+    setImportParsedItems([])
     setImportSkippedFile(0)
     setImportError('')
     setImportOpen(true)
-  }
-
-  function importProgramName() {
-    return progName.get(importProgId) || ''
   }
 
   async function downloadTemplate() {
@@ -175,34 +228,112 @@ export default function UptDiklatPage() {
       const ExcelJS = (await import('exceljs')).default
       const wb = new ExcelJS.Workbook()
       wb.creator = 'DASPESLUS'
-      const progLabel = importProgId ? importProgramName() : (filterProg ? progName.get(filterProg) : 'Umum')
-      const ws = wb.addWorksheet(`Template Diklat ${year}`, { properties: { tabColor: { argb: '0F172A' } } })
-      ws.columns = [{ width: 8 }, { width: 60 }]
-      const head = ws.addRow(['NO', 'NAMA DIKLAT'])
-      head.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
-      head.height = 24
-      head.eachCell((c) => {
+
+      // Sheet 1: DATA DIKLAT
+      const ws = wb.addWorksheet('DATA DIKLAT', { properties: { tabColor: { argb: '0F172A' } } })
+      ws.columns = [
+        { header: 'NO', key: 'no', width: 6 },
+        { header: 'PROGRAM TUJUAN', key: 'program', width: 34 },
+        { header: 'NAMA DIKLAT', key: 'name', width: 44 },
+        { header: 'TARGET PESERTA (OPSIONAL)', key: 'tp', width: 25 },
+        { header: 'TARGET LULUSAN (OPSIONAL)', key: 'tl', width: 25 },
+      ]
+
+      // Header Judul
+      ws.mergeCells('A1:E1')
+      const tCell = ws.getCell('A1')
+      tCell.value = `TEMPLATE IMPORT DATA DIKLAT — ${upt?.code || 'UPT'} ${upt?.name || ''} (${year})`
+      tCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF0F172A' } }
+      tCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      ws.getRow(1).height = 24
+
+      ws.mergeCells('A2:E2')
+      const sCell = ws.getCell('A2')
+      sCell.value = 'Petunjuk: Cukup isi 1 file ini untuk semua program! Tulis nama program di kolom PROGRAM TUJUAN dan nama diklat di kolom NAMA DIKLAT.'
+      sCell.font = { name: 'Calibri', size: 9.5, italic: true, color: { argb: 'FF475569' } }
+      sCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      ws.getRow(2).height = 18
+
+      // Table Header Row 4
+      const hdr = ws.getRow(4)
+      hdr.values = ['NO', 'PROGRAM TUJUAN', 'NAMA DIKLAT', 'TARGET PESERTA (OPSIONAL)', 'TARGET LULUSAN (OPSIONAL)']
+      hdr.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      hdr.height = 24
+      hdr.eachCell((c) => {
         c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }
         c.alignment = { horizontal: 'center', vertical: 'middle' }
+        c.border = {
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        }
       })
-      const ex1 = ws.addRow([1, 'Contoh: Pendidikan Karakter (hapus baris contoh ini)'])
-      ex1.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF64748B' } }
-      ex1.height = 20
-      const ex2 = ws.addRow([2, 'Contoh: Diklat Kepelautan (hapus baris contoh ini)'])
-      ex2.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF64748B' } }
-      ex2.height = 20
+
+      // Baris-baris contoh berdasarkan program nyata UPT
+      const samplePrograms = leafPrograms.slice(0, 4)
+      let rIdx = 5
+      let exCount = 1
+
+      samplePrograms.forEach((sp) => {
+        const row = ws.getRow(rIdx++)
+        row.values = [exCount++, sp.name, `Contoh Nama Diklat di ${sp.name}`, 20, 20]
+        row.height = 20
+        row.eachCell((c, col) => {
+          c.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } }
+          c.alignment = { horizontal: col === 2 || col === 3 ? 'left' : 'center', vertical: 'middle' }
+          c.border = {
+            top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          }
+        })
+      })
+
+      // Sheet 2: PANDUAN & DAFTAR PROGRAM RESMI
+      const wsRef = wb.addWorksheet('DAFTAR PROGRAM RESMI', { properties: { tabColor: { argb: '0284C7' } } })
+      wsRef.columns = [
+        { header: 'No', key: 'no', width: 6 },
+        { header: 'Nama Program (Bisa Di-copy)', key: 'name', width: 38 },
+        { header: 'Program Induk', key: 'parent', width: 28 },
+        { header: 'Kategori', key: 'cat', width: 14 },
+      ]
+      const rHead = wsRef.getRow(1)
+      rHead.values = ['NO', 'NAMA PROGRAM RESMI (BISA DI-COPY KE TEMPLATE)', 'PROGRAM INDUK', 'KATEGORI']
+      rHead.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      rHead.height = 22
+      rHead.eachCell((c) => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } }
+        c.alignment = { horizontal: 'center', vertical: 'middle' }
+      })
+      leafPrograms.forEach((p, idx) => {
+        const row = wsRef.getRow(idx + 2)
+        row.values = [idx + 1, p.name, p.parentName || '—', p.targetGroup || p.category || 'taruna']
+        row.height = 19
+        row.eachCell((c, col) => {
+          c.font = { name: 'Calibri', size: 10, bold: col === 2, color: { argb: 'FF1E293B' } }
+          c.alignment = { horizontal: col === 2 || col === 3 ? 'left' : 'center', vertical: 'middle' }
+          c.border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          }
+        })
+      })
 
       const buf = await wb.xlsx.writeBuffer()
       const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      const cleanProg = progLabel.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'Umum'
-      a.download = `Template_Diklat_${cleanProg}_${year}.xlsx`
+      const uptSlug = (upt?.code || 'UPT').replace(/[^\w\-]+/g, '_')
+      a.download = `Template_Import_Diklat_${uptSlug}_${year}.xlsx`
       document.body.appendChild(a)
       a.click()
       a.remove()
       URL.revokeObjectURL(a.href)
-      toast.success('Template diunduh', `Template Excel untuk ${progLabel} berhasil diunduh.`)
+      toast.success('Template diunduh', `Template import diklat lengkap tahun ${year} berhasil diunduh.`)
     } catch (err) {
       setImportError('Gagal membuat template: ' + apiError(err))
       toast.error('Gagal membuat template', apiError(err))
@@ -339,60 +470,168 @@ export default function UptDiklatPage() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (!importProgId) {
-      setImportError('Pilih dulu program induk tujuan sebelum upload file.')
-      return
-    }
     setImportParsing(true)
     setImportError('')
+    setImportParsedItems([])
     try {
       const ExcelJS = (await import('exceljs')).default
       const wb = new ExcelJS.Workbook()
       await wb.xlsx.load(await file.arrayBuffer())
       const ws = wb.worksheets[0]
       if (!ws) throw new Error('File kosong / sheet tidak terbaca.')
-      const names = []
-      let skipped = 0
-      ws.eachRow((row) => {
-        const raw = String(row.getCell(2).value ?? '').trim()
-        if (!raw) { skipped += 1; return }
-        const low = raw.toLowerCase()
-        // Lewati baris judul & baris contoh template
-        if (low === 'nama diklat' || low === 'no' || low.startsWith('contoh:')) { skipped += 1; return }
-        names.push(raw.length > 150 ? raw.slice(0, 150) : raw)
+
+      const parsed = []
+      let skippedCount = 0
+      let activeProgram = null
+
+      ws.eachRow((row, rowNumber) => {
+        // Ambil isi sel 1 sampai 5
+        const c1 = String(row.getCell(1).value ?? '').trim()
+        const c2 = String(row.getCell(2).value ?? '').trim()
+        const c3 = String(row.getCell(3).value ?? '').trim()
+        const c4 = row.getCell(4).value
+        const c5 = row.getCell(5).value
+
+        const low1 = c1.toLowerCase()
+        const low2 = c2.toLowerCase()
+        const low3 = c3.toLowerCase()
+
+        // Lewati baris header judul utama template
+        if (low1.includes('template import') || low2.includes('template import') || low1.includes('petunjuk:') || low2.includes('petunjuk:')) {
+          return
+        }
+
+        // Lewati baris header kolom
+        if (
+          low2 === 'nama diklat' || low3 === 'nama diklat' ||
+          low2 === 'program tujuan' || low2 === 'program' ||
+          low2.startsWith('contoh:') || low3.startsWith('contoh:') ||
+          low1 === 'no' && (low2 === 'program tujuan' || low2 === 'nama diklat')
+        ) {
+          skippedCount += 1
+          return
+        }
+
+        // POLA 1: Format Template Baru (Kolom B = Program, Kolom C = Nama Diklat)
+        if (c2 && c3 && isNaN(Number(c3))) {
+          const matchedProg = matchProgramClient(c2)
+          if (matchedProg) {
+            const dName = c3.length > 150 ? c3.slice(0, 150) : c3
+            parsed.push({
+              name: dName,
+              programId: matchedProg.id,
+              programName: matchedProg.name,
+              targetPeserta: Math.max(0, parseInt(c4, 10) || 0),
+              targetLulusan: Math.max(0, parseInt(c5, 10) || 0),
+            })
+            return
+          }
+        }
+
+        // POLA 2: Format Grouping / Laptah (seperti di lembar Laptah asli UPT):
+        // Sebuah baris berisi judul program (misal "Pola Pembibitan", "Mandiri", "D. Pelatihan Teknis (Short Course)")
+        const possibleProgMatch = matchProgramClient(c2 || c1)
+        if (possibleProgMatch && (!c3 || isNaN(Number(c3)))) {
+          activeProgram = possibleProgMatch
+          skippedCount += 1
+          return
+        }
+
+        // Jika ada activeProgram dan baris ini berisi nama diklat di kolom B (atau kolom A/C)
+        const possibleDiklatName = c2 || c3 || c1
+        if (activeProgram && possibleDiklatName) {
+          const low = possibleDiklatName.toLowerCase()
+          if (
+            low === 'no' || low === 'nama' || low.includes('total') || low.includes('jumlah') ||
+            low.startsWith('politeknik') || low.startsWith('balai') || low.startsWith('sekolah')
+          ) {
+            skippedCount += 1
+            return
+          }
+          const tp = Math.max(0, parseInt(c3, 10) || parseInt(c4, 10) || 0)
+          const tl = Math.max(0, parseInt(c4, 10) || parseInt(c5, 10) || 0)
+          parsed.push({
+            name: possibleDiklatName.slice(0, 150),
+            programId: activeProgram.id,
+            programName: activeProgram.name,
+            targetPeserta: tp,
+            targetLulusan: tl,
+          })
+          return
+        }
+
+        // POLA 3: Diklat baris tunggal di kolom B tanpa program terdeteksi
+        if (c2 && !c3) {
+          parsed.push({
+            name: c2.slice(0, 150),
+            programId: defaultFallbackProgId || null,
+            programName: defaultFallbackProgId ? progName.get(defaultFallbackProgId) : null,
+            targetPeserta: Math.max(0, parseInt(c4, 10) || 0),
+            targetLulusan: Math.max(0, parseInt(c5, 10) || 0),
+          })
+          return
+        }
+
+        skippedCount += 1
       })
-      // Hilangkan duplikat di dalam file (tampilkan sekali, sisanya terhitung dilewati)
-      const seen = new Set()
-      const unique = []
-      let dup = 0
-      for (const n of names) {
-        const k = n.toLowerCase()
-        if (seen.has(k)) { dup += 1; continue }
-        seen.add(k)
-        unique.push(n)
+
+      // Dedup nama diklat per program
+      const uniqueItems = []
+      const seenKey = new Set()
+      let dupCount = 0
+      for (const item of parsed) {
+        const k = `${item.name.toLowerCase()}|${item.programId || ''}`
+        if (seenKey.has(k)) {
+          dupCount += 1
+          continue
+        }
+        seenKey.add(k)
+        uniqueItems.push(item)
       }
-      if (!unique.length) {
-        setImportError('Tidak ada nama diklat valid di file. Ikuti format template (kolom NAMA DIKLAT).')
-        setImportNames([])
+
+      if (!uniqueItems.length) {
+        setImportError('Tidak ada nama diklat valid yang ditemukan di file. Pastikan menggunakan format template yang disediakan.')
+        setImportParsedItems([])
         return
       }
-      setImportNames(unique)
-      setImportSkippedFile(skipped + dup)
+
+      setImportParsedItems(uniqueItems)
+      setImportSkippedFile(skippedCount + dupCount)
       setImportFileName(file.name)
     } catch (err) {
-      setImportError('Gagal membaca file: ' + apiError(err))
-      setImportNames([])
+      setImportError('Gagal membaca file Excel: ' + apiError(err))
+      setImportParsedItems([])
     } finally {
       setImportParsing(false)
     }
   }
 
   async function doImport() {
-    if (!importProgId || !importNames.length) return
+    if (!importParsedItems.length) return
     setImportSending(true)
     try {
-      const { data } = await api.post('/diklats/import', { year, programIds: [importProgId], names: importNames })
-      toast.success('Import selesai', data.message, 6000)
+      // Pastikan semua item memiliki programId (gunakan defaultFallbackProgId jika ada yang belum diset)
+      const finalItems = importParsedItems
+        .map((item) => {
+          if (!item.programId && defaultFallbackProgId) {
+            return {
+              ...item,
+              programId: defaultFallbackProgId,
+              programName: progName.get(defaultFallbackProgId) || 'Program',
+            }
+          }
+          return item
+        })
+        .filter((it) => it.programId)
+
+      if (!finalItems.length) {
+        toast.warning('Program belum ditentukan', 'Pilih program tujuan untuk diklat yang belum memiliki program.')
+        setImportSending(false)
+        return
+      }
+
+      const { data } = await api.post('/diklats/import', { year, items: finalItems })
+      toast.success('Import Berhasil', data.message, 7000)
       setImportConfirmOpen(false)
       setImportOpen(false)
       await load()
@@ -608,55 +847,165 @@ export default function UptDiklatPage() {
 
       <ConfirmDialog open={!!deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Hapus Diklat?" body={`"${deleteTarget?.name}" akan dihapus dari tahun ${year}.`} confirmLabel="Ya, Hapus" cancelLabel="Batal" confirmTone="danger" loading={deleting} />
 
-      {/* Modal import Excel */}
-      <Modal open={importOpen} onClose={() => setImportOpen(false)} title={`Import Diklat Excel — ${year}`} subtitle={`${upt?.code || ''} ${upt?.name || ''}`}>
+      {/* Modal import Excel Sekaligus (Multi-Program) */}
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title={`Import Diklat Sekaligus — ${year}`}
+        subtitle={`${upt?.code || ''} ${upt?.name || ''} — Cukup 1 file Excel untuk semua program diklat Anda`}
+      >
         <div className="space-y-4">
           {importError && <Alert type="error">{importError}</Alert>}
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-            <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Langkah 1 — Pilih program induk tujuan</p>
-            <select className="form-input !rounded-xl" value={importProgId} onChange={(e) => { setImportProgId(e.target.value); setImportNames([]); setImportFileName(''); setImportSkippedFile(0); setImportError('') }}>
-              <option value="">— Pilih program (mis. Pelatihan Teknis) —</option>
-              {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <button type="button" className="btn-secondary !rounded-xl text-xs" onClick={downloadTemplate}>
-              <IconDownload className="h-4 w-4" /> Unduh Template {importProgId ? `(${importProgramName()})` : 'Excel'}
-            </button>
-            <p className="text-[11px] text-slate-500">Template hanya berisi 2 kolom: <strong>NO</strong> dan <strong>NAMA DIKLAT</strong> — khusus untuk program yang dipilih. Isi nama-nama diklat di bawah baris contoh.</p>
+          {/* Langkah 1: Unduh Template */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                Langkah 1 — Unduh Template Excel Lengkap
+              </p>
+              <button
+                type="button"
+                className="btn-primary !rounded-xl !py-1.5 !px-3 text-xs bg-navy-900 hover:bg-navy-800 text-white flex items-center gap-1.5 shadow-sm"
+                onClick={downloadTemplate}
+              >
+                <IconDownload className="h-4 w-4" /> Unduh Template Excel
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Template Excel telah dilengkapi kolom <strong>PROGRAM TUJUAN</strong>, <strong>NAMA DIKLAT</strong>, serta <strong>TARGET (opsional)</strong>. Anda bisa langsung mengelompokkan semua diklat UPT Anda ke dalam <strong>satu file</strong> sekaligus tanpa perlu upload berkali-kali.
+            </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-            <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Langkah 2 — Upload file yang sudah diisi</p>
-            <label className={`flex items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-sm font-bold cursor-pointer transition-colors ${!importProgId ? 'border-slate-200 text-slate-400 bg-slate-50' : 'border-navy-300 text-navy-800 hover:bg-navy-50 bg-white'}`}>
-              <IconFileText className="h-5 w-5" />
-              {importParsing ? 'Membaca file...' : (importFileName || 'Pilih file .xlsx')}
-              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={!importProgId || importParsing} onChange={handleImportFile} />
+          {/* Langkah 2: Upload File */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-2.5">
+            <p className="text-xs font-black text-slate-800 uppercase tracking-wide">
+              Langkah 2 — Upload File Excel yang Sudah Diisi
+            </p>
+            <label
+              className={clsx(
+                'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 text-sm font-bold cursor-pointer transition-colors',
+                importParsing
+                  ? 'border-slate-300 bg-slate-100 text-slate-500'
+                  : 'border-navy-300 text-navy-900 hover:bg-navy-50/60 bg-white'
+              )}
+            >
+              <IconFileText className="h-6 w-6 text-navy-700" />
+              <span>{importParsing ? 'Membaca data file Excel...' : (importFileName || 'Klik atau Drag file Excel (.xlsx / .xls) ke sini')}</span>
+              <span className="text-[11px] font-normal text-slate-500">Mendukung format template DASPESLUS maupun tabel Laptah UPT</span>
+              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importParsing} onChange={handleImportFile} />
             </label>
             {importFileName && (
-              <p className="text-xs text-slate-500">File: <strong className="text-slate-800">{importFileName}</strong></p>
+              <p className="text-xs text-slate-600">
+                File terpilih: <strong className="text-slate-900">{importFileName}</strong>
+              </p>
             )}
           </div>
 
-          {importNames.length > 0 && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-              <p className="text-xs font-extrabold text-emerald-900 uppercase tracking-wide">Langkah 3 — Pratinjau ({importNames.length} nama)</p>
-              <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-emerald-100 bg-white divide-y divide-slate-100">
-                {importNames.map((n, i) => (
-                  <div key={i} className="px-3 py-1.5 text-[13px] font-semibold text-slate-700 flex gap-2">
-                    <span className="text-slate-400 font-bold w-6 shrink-0">{i + 1}.</span><span>{n}</span>
+          {/* Langkah 3: Pratinjau Pengelompokan & Data */}
+          {importParsedItems.length > 0 && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/60 pb-2">
+                <div>
+                  <p className="text-xs font-black text-emerald-950 uppercase tracking-wide">
+                    Langkah 3 — Pratinjau Pengelompokan ({importParsedItems.length} Diklat Terbaca)
+                  </p>
+                  <p className="text-[11px] text-emerald-800">
+                    Semua diklat di bawah ini akan diimpor sekaligus ke program masing-masing:
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-100 text-emerald-900 text-xs font-black px-2.5 py-0.5">
+                  Siap diimport
+                </span>
+              </div>
+
+              {/* Rincian per grup program */}
+              <div className="flex flex-wrap gap-1.5">
+                {[...new Set(importParsedItems.map((it) => it.programName || 'Belum Ditentukan'))].map((pName) => {
+                  const count = importParsedItems.filter((it) => (it.programName || 'Belum Ditentukan') === pName).length
+                  const isUnassigned = pName === 'Belum Ditentukan'
+                  return (
+                    <span
+                      key={pName}
+                      className={clsx(
+                        'rounded-lg px-2.5 py-1 text-xs font-bold border flex items-center gap-1.5',
+                        isUnassigned
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : 'bg-white text-navy-900 border-emerald-200 shadow-xs'
+                      )}
+                    >
+                      <span>{pName}</span>
+                      <span className={clsx('rounded-full text-[10px] px-1.5 py-0.2 font-black', isUnassigned ? 'bg-amber-200 text-amber-950' : 'bg-navy-900 text-white')}>
+                        {count} diklat
+                      </span>
+                    </span>
+                  )
+                })}
+              </div>
+
+              {/* Dropdown fallback jika ada diklat yang belum memiliki program */}
+              {importParsedItems.some((it) => !it.programId) && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
+                  <p className="font-bold text-amber-900">
+                    ⚠️ Beberapa baris belum terpetakan ke program otomatis:
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-800 text-[11px] shrink-0">Pilih program untuk baris tersebut:</span>
+                    <select
+                      className="form-input !py-1 !text-xs font-semibold !rounded-lg"
+                      value={defaultFallbackProgId}
+                      onChange={(e) => setDefaultFallbackProgId(e.target.value)}
+                    >
+                      {leafPrograms.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabel mini daftar nama diklat */}
+              <div className="max-h-52 overflow-y-auto rounded-xl border border-emerald-200 bg-white divide-y divide-slate-100 text-xs">
+                {importParsedItems.map((item, i) => (
+                  <div key={i} className="px-3 py-2 flex items-center justify-between gap-3 hover:bg-slate-50">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-slate-400 font-bold w-6 shrink-0">{i + 1}.</span>
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 truncate" title={item.name}>{item.name}</p>
+                        <p className="text-[10px] text-slate-500">
+                          Program:{' '}
+                          <span className="font-semibold text-navy-800">
+                            {item.programName || (defaultFallbackProgId ? progName.get(defaultFallbackProgId) : 'Pilih program')}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    {(item.targetPeserta > 0 || item.targetLulusan > 0) && (
+                      <div className="text-[10px] text-right shrink-0 font-medium text-slate-500">
+                        <span>Tgt Pst: <strong>{fmtNum(item.targetPeserta)}</strong></span>
+                        <span className="ml-2">Tgt Lls: <strong>{fmtNum(item.targetLulusan)}</strong></span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              {importSkippedFile > 0 && <p className="text-[11px] text-slate-500 mt-1.5">{importSkippedFile} baris kosong/duplikat/contoh dilewati otomatis.</p>}
-              <div className="flex justify-end gap-2 mt-3">
-                <button type="button" className="btn-secondary !rounded-xl" onClick={() => setImportOpen(false)}>Batal</button>
+
+              {importSkippedFile > 0 && (
+                <p className="text-[11px] text-slate-500">
+                  ℹ️ {importSkippedFile} baris header/kosong/duplikat dilewati secara otomatis.
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" className="btn-secondary !rounded-xl" onClick={() => setImportOpen(false)}>
+                  Batal
+                </button>
                 <button
                   type="button"
-                  className="btn-primary !rounded-xl min-w-[130px]"
+                  className="btn-primary !rounded-xl min-w-[170px] bg-emerald-600 hover:bg-emerald-700 shadow-sm"
                   disabled={importSending}
                   onClick={() => setImportConfirmOpen(true)}
                 >
-                  {importSending ? <><Spinner /> Mengirim...</> : <><IconCheck className="h-4 w-4" /> Kirim</>}
+                  {importSending ? <><Spinner /> Mengimpor...</> : <><IconCheck className="h-4 w-4" /> Import Semua Diklat</>}
                 </button>
               </div>
             </div>
@@ -668,10 +1017,10 @@ export default function UptDiklatPage() {
         open={importConfirmOpen}
         onCancel={() => { if (!importSending) setImportConfirmOpen(false) }}
         onConfirm={doImport}
-        title="Yakin import data ini?"
-        body={`Import ${importNames.length} nama diklat ini untuk program induk "${importProgramName()}" tahun ${year}? Nama yang sudah ada akan dilewati otomatis.`}
-        confirmLabel="Ya, Import"
-        cancelLabel="Cek Lagi"
+        title="Konfirmasi Import Sekaligus"
+        body={`Yakin ingin mengimpor ${importParsedItems.length} diklat ke program-program terkait untuk tahun ${year}? Diklat yang sudah terdaftar akan diperbarui secara otomatis tanpa duplikasi.`}
+        confirmLabel="Ya, Import Sekarang"
+        cancelLabel="Periksa Lagi"
         confirmTone="primary"
         loading={importSending}
       />

@@ -98,23 +98,71 @@ router.post("/", requireUpt, async (req, res) => {
 const MAX_IMPORT_NAMES = 500;
 const MAX_NAME_LEN = 150;
 
-/** POST /api/diklats/import — (UPT) import banyak nama diklat sekaligus ke 1 program */
+function normalizeProgString(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/^[a-z0-9][\.\-\)]\s*/i, '') // hapus awalan seperti A. atau 1.
+    .replace(/\(.*?\)/g, '')              // hapus tanda kurung
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolveProgramIdFromInput(input, allPrograms) {
+  if (!input) return null;
+  const raw = String(input).trim();
+  const lower = raw.toLowerCase();
+  const clean = normalizeProgString(raw);
+
+  // 1. Direct ID match
+  const byId = allPrograms.find((p) => String(p.id) === raw);
+  if (byId) return byId.id;
+
+  // 2. Exact name match (case-insensitive)
+  const byExact = allPrograms.find((p) => p.name.trim().toLowerCase() === lower);
+  if (byExact) return byExact.id;
+
+  // 3. Clean name match
+  const byClean = allPrograms.find((p) => normalizeProgString(p.name) === clean);
+  if (byClean) return byClean.id;
+
+  // 4. Sinonim umum (Mandiri -> Non Pola Pembibitan)
+  if (clean.includes('mandiri')) {
+    const nonPola = allPrograms.find((p) => {
+      const pn = normalizeProgString(p.name);
+      return pn.includes('non pola') || pn.includes('mandiri');
+    });
+    if (nonPola) return nonPola.id;
+  }
+  if (clean.includes('pola pembibitan')) {
+    const pola = allPrograms.find((p) => normalizeProgString(p.name).includes('pola pembibitan'));
+    if (pola) return pola.id;
+  }
+
+  // 5. Partial contains match
+  const byIncludes = allPrograms.find((p) => {
+    const pn = normalizeProgString(p.name);
+    return (pn.length >= 4 && clean.includes(pn)) || (clean.length >= 4 && pn.includes(clean));
+  });
+  if (byIncludes) return byIncludes.id;
+
+  // 6. Match parentName jika input mencantumkan nama induk
+  const byParent = allPrograms.find((p) => {
+    const prn = normalizeProgString(p.parentName);
+    return prn && (prn === clean || clean.includes(prn));
+  });
+  if (byParent) return byParent.id;
+
+  return null;
+}
+
+/** POST /api/diklats/import — (UPT) import banyak diklat sekaligus (mendukung multi-program dalam 1 file) */
 router.post("/import", requireUpt, async (req, res) => {
   try {
     const uptId = req.user.uptId;
     if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
     const year = Number(req.body.year) || new Date().getFullYear();
-    let programIds = req.body.programIds || req.body.programId;
-    if (!Array.isArray(programIds)) programIds = programIds ? [programIds] : [];
-    programIds = [...new Set(programIds.map(String).filter(Boolean))];
-    let names = Array.isArray(req.body.names) ? req.body.names : [];
-    names = names.map((n) => String(n || "").trim()).filter(Boolean);
 
-    if (!programIds.length) return res.status(400).json({ error: "Pilih 1 program tujuan import." });
-    if (!names.length) return res.status(400).json({ error: "Tidak ada nama diklat yang bisa diimport." });
-    if (names.length > MAX_IMPORT_NAMES) {
-      return res.status(400).json({ error: `Maksimal ${MAX_IMPORT_NAMES} nama per sekali import.` });
-    }
     if (!year || year < 2000 || year > 2100) return res.status(400).json({ error: "Tahun tidak valid." });
 
     const tSid = `${uptId}_${year}_00`;
@@ -123,47 +171,135 @@ router.post("/import", requireUpt, async (req, res) => {
       return res.status(403).json({ error: `Target PK ${year} sudah dikirim dan terkunci (${tSub.status}). Ajukan Perubahan Target PK untuk menambah diklat.` });
     }
 
-    const progMap = new Map();
-    for (const pid of programIds) {
-      const prog = await Program.findByPk(pid);
-      if (!prog) return res.status(404).json({ error: `Program "${pid}" tidak ditemukan.` });
-      progMap.set(pid, prog.name);
+    const allPrograms = (await Program.findAll()).map((p) => p.toJSON());
+    const progMap = new Map(allPrograms.map((p) => [p.id, p]));
+
+    // Format baru: items = [ { name, programId, programName, targetPeserta, targetLulusan } ]
+    // Format lama: names = [ "Diklat A", ... ], programIds = [ "uuid", ... ]
+    let rawItems = [];
+    if (Array.isArray(req.body.items) && req.body.items.length > 0) {
+      rawItems = req.body.items;
+    } else if (Array.isArray(req.body.names) && req.body.names.length > 0) {
+      let defaultProgIds = req.body.programIds || req.body.programId;
+      if (!Array.isArray(defaultProgIds)) defaultProgIds = defaultProgIds ? [defaultProgIds] : [];
+      defaultProgIds = defaultProgIds.map(String).filter(Boolean);
+      rawItems = req.body.names.map((n) => ({
+        name: n,
+        programIds: defaultProgIds,
+      }));
+    }
+
+    if (!rawItems.length) {
+      return res.status(400).json({ error: "Tidak ada data diklat yang bisa diimport." });
+    }
+    if (rawItems.length > MAX_IMPORT_NAMES) {
+      return res.status(400).json({ error: `Maksimal ${MAX_IMPORT_NAMES} baris per sekali import.` });
     }
 
     const created = [];
+    const updated = [];
     const skipped = [];
-    const seenLower = new Set();
-    for (const rawName of names) {
+    const programCountMap = new Map();
+
+    for (const item of rawItems) {
+      const rawName = String(item.name || "").trim();
+      if (!rawName) continue;
       const name = rawName.length > MAX_NAME_LEN ? rawName.slice(0, MAX_NAME_LEN) : rawName;
       const lower = name.toLowerCase();
-      if (seenLower.has(lower)) {
-        skipped.push({ name, reason: "duplikat di file" });
+
+      // Resolve program IDs
+      let pids = [];
+      if (item.programId) pids.push(String(item.programId));
+      if (Array.isArray(item.programIds)) pids.push(...item.programIds.map(String));
+      if (item.programName) {
+        const resolvedId = resolveProgramIdFromInput(item.programName, allPrograms);
+        if (resolvedId) pids.push(String(resolvedId));
+      }
+      pids = [...new Set(pids.filter(Boolean))];
+
+      // Jika program tidak ditemukan dan UPT punya program default, atau lewati bila tidak ada program
+      if (!pids.length) {
+        skipped.push({ name, reason: `Program "${item.programName || '-'}" tidak dikenali di sistem` });
         continue;
       }
-      seenLower.add(lower);
-      const dup = await Diklat.findOne({
+
+      // Pastikan program exists
+      const validPids = pids.filter((id) => progMap.has(id));
+      if (!validPids.length) {
+        skipped.push({ name, reason: "Program tidak ditemukan" });
+        continue;
+      }
+
+      const tp = Math.max(0, parseInt(item.targetPeserta, 10) || 0);
+      const tl = Math.max(0, parseInt(item.targetLulusan, 10) || 0);
+
+      // Cek apakah diklat dengan nama sama sudah ada di UPT tahun ini
+      const existing = await Diklat.findOne({
         where: { uptId, year, [Op.and]: [where(fn("LOWER", col("name")), lower)] },
       });
-      if (dup) {
-        skipped.push({ name, reason: "sudah ada" });
-        continue;
+
+      if (existing) {
+        // Update pemetaan program jika ada program baru
+        const currentPids = Array.isArray(existing.programIds) ? existing.programIds.map(String) : [];
+        const mergedPids = [...new Set([...currentPids, ...validPids])];
+        const patch = {};
+        if (mergedPids.length > currentPids.length) patch.programIds = mergedPids;
+        if (tp > 0 && (!existing.targetPeserta || existing.targetPeserta === 0)) patch.targetPeserta = tp;
+        if (tl > 0 && (!existing.targetLulusan || existing.targetLulusan === 0)) patch.targetLulusan = tl;
+
+        if (Object.keys(patch).length > 0) {
+          await existing.update(patch);
+          updated.push({ id: existing.id, name });
+        } else {
+          skipped.push({ name, reason: "sudah terdaftar di program ini" });
+        }
+      } else {
+        const doc = await Diklat.create({
+          uptId,
+          year,
+          name,
+          programIds: validPids,
+          targetPeserta: tp,
+          targetLulusan: tl,
+          isActive: true,
+          createdBy: req.uid,
+        });
+        created.push({ id: doc.id, name, programIds: validPids });
+
+        for (const pid of validPids) {
+          const pName = progMap.get(pid)?.name || "Program";
+          programCountMap.set(pName, (programCountMap.get(pName) || 0) + 1);
+        }
       }
-      const doc = await Diklat.create({
-        uptId, year, name, programIds,
-        targetPeserta: 0, targetLulusan: 0, isActive: true, createdBy: req.uid,
-      });
-      created.push({ id: doc.id, name });
     }
 
-    const progNames = programIds.map((pid) => progMap.get(pid)).join(", ");
-    audit(req, "IMPORT_DIKLAT", "diklat", null, { year, program: progNames, dibuat: created.length, dilewati: skipped.length });
+    const summaryPrograms = [...programCountMap.entries()].map(([pName, count]) => `${pName} (${count})`).join(", ");
+    audit(req, "IMPORT_DIKLAT_MULTI", "diklat", null, {
+      year,
+      dibuat: created.length,
+      diperbarui: updated.length,
+      dilewati: skipped.length,
+      program: summaryPrograms || "-",
+    });
+
+    const msg = created.length > 0
+      ? `Berhasil mengimpor ${created.length} diklat baru${updated.length ? ` dan memperbarui ${updated.length} diklat` : ''}${summaryPrograms ? ` ke program: ${summaryPrograms}` : ''}.${skipped.length ? ` (${skipped.length} dilewati/duplikat)` : ''}`
+      : updated.length > 0
+      ? `${updated.length} diklat diperbarui pemetaan programnya.${skipped.length ? ` (${skipped.length} dilewati)` : ''}`
+      : `Tidak ada diklat baru yang diimpor. ${skipped.length} baris dilewati karena sudah ada atau program tidak cocok.`;
+
     res.status(201).json({
-      message: `${created.length} nama diklat masuk ke ${progNames}${skipped.length ? `, ${skipped.length} dilewati` : ''}.`,
-      created, createdCount: created.length, skipped, skippedCount: skipped.length,
+      message: msg,
+      createdCount: created.length,
+      updatedCount: updated.length,
+      skippedCount: skipped.length,
+      created,
+      updated,
+      skipped,
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Gagal import diklat." });
+    res.status(500).json({ error: "Gagal import diklat: " + (err.message || err) });
   }
 });
 
