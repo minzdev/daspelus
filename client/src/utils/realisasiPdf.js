@@ -60,7 +60,7 @@ export function buildRealisasiPdf({ uptCode, uptName, year, month, rows, totalPe
     margin: { left: margin, right: margin, bottom: 60 },
     head: [[
       { content: 'No', styles: { halign: 'center' } },
-      { content: 'Nama Program', styles: { halign: 'left' } },
+      { content: 'Kategori Diklat', styles: { halign: 'left' } },
       { content: 'Peserta L', styles: { halign: 'center' } },
       { content: 'Peserta P', styles: { halign: 'center' } },
       { content: 'Lulusan L', styles: { halign: 'center' } },

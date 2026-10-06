@@ -283,7 +283,7 @@ export default function MasterProgramPage() {
               <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-navy-300" />
               <input
                 className="form-input !py-2 pl-9 w-full sm:w-[280px]"
-                placeholder={activeGroup === 'semua' ? 'Cari nama program...' : `Cari di ${activeGroup}...`}
+                placeholder={activeGroup === 'semua' ? 'Cari kategori diklat...' : `Cari di ${activeGroup}...`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -545,7 +545,7 @@ export default function MasterProgramPage() {
         title={modalTitle}
         subtitle={
           editing
-            ? `Perbarui nama program "${editing.name}".`
+            ? `Perbarui kategori diklat "${editing.name}".`
             : addMode === 'child'
               ? `Turunan baru di bawah "${parents.find((p) => p.id === childParentId)?.name || ''}".`
               : 'Kategori utama, mis. Pendidikan Pembentukan.'
@@ -553,7 +553,7 @@ export default function MasterProgramPage() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {formError && <Alert type="error">{formError}</Alert>}
-          <FormField label="Nama Program" required>
+          <FormField label="Kategori Diklat" required>
             <input
               className="form-input"
               placeholder={addMode === 'child' && !editing ? 'Pola Pembibitan' : 'Pendidikan Pembentukan'}

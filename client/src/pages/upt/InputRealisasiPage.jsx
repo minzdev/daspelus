@@ -633,7 +633,7 @@ export default function InputRealisasiPage() {
             <thead>
               <tr className="bg-slate-900 text-white">
                 <th rowSpan={2} className="!text-white !border-slate-800 text-center align-middle !py-3 !px-2 text-[11px] font-bold tracking-wide">#</th>
-                <th rowSpan={2} className="!text-white !border-slate-800 align-middle !py-3 !px-3 text-left text-[11px] font-bold tracking-widest uppercase">Nama Program</th>
+                <th rowSpan={2} className="!text-white !border-slate-800 align-middle !py-3 !px-3 text-left text-[11px] font-bold tracking-widest uppercase">Kategori Diklat</th>
                 <th colSpan={3} className="text-center !text-white !bg-sky-700 !border-sky-800 !py-2.5">
                   <span className="inline-flex items-center justify-center gap-1.5 text-[11px] font-black tracking-[0.08em] w-full"><span className="h-1.5 w-1.5 rounded-full bg-white/90" /> PESERTA</span>
                 </th>

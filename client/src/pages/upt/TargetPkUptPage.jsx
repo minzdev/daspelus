@@ -445,7 +445,7 @@ export default function TargetPkUptPage() {
 
       ws.mergeCells('A2:D2')
       const sCell = ws.getCell('A2')
-      sCell.value = 'Petunjuk: Isi nama program di kolom PROGRAM TUJUAN, nama diklat di kolom NAMA DIKLAT, dan angka Target PK di kolom TARGET PK.'
+      sCell.value = 'Petunjuk: Isi nama kategori diklat di kolom PROGRAM TUJUAN, nama diklat di kolom NAMA DIKLAT, dan angka Target PK di kolom TARGET PK.'
       sCell.font = { name: 'Calibri', size: 9.5, italic: true, color: { argb: 'FF475569' } }
       sCell.alignment = { horizontal: 'center', vertical: 'middle' }
       ws.getRow(2).height = 18
@@ -490,11 +490,11 @@ export default function TargetPkUptPage() {
       const wsRef = wb.addWorksheet('DAFTAR PROGRAM RESMI', { properties: { tabColor: { argb: '0284C7' } } })
       wsRef.columns = [
         { header: 'No', key: 'no', width: 6 },
-        { header: 'Nama Program (Bisa Di-copy)', key: 'name', width: 38 },
+        { header: 'Kategori Diklat (Bisa Di-copy)', key: 'name', width: 38 },
         { header: 'Program Induk', key: 'parent', width: 28 },
       ]
       const rHead = wsRef.getRow(1)
-      rHead.values = ['NO', 'NAMA PROGRAM RESMI (BISA DI-COPY KE TEMPLATE)', 'PROGRAM INDUK']
+      rHead.values = ['NO', 'NAMA KATEGORI DIKLAT RESMI (BISA DI-COPY KE TEMPLATE)', 'PROGRAM INDUK']
       rHead.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
       rHead.height = 22
       rHead.eachCell((c) => {

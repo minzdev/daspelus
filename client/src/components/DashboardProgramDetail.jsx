@@ -364,7 +364,7 @@ export default function DashboardProgramDetail({ programs = [], year, loading = 
                       )}
                     </div>
 
-                    {/* Nama Program */}
+                    {/* Kategori Diklat */}
                     <h3 className="text-sm font-black text-navy-900 leading-snug line-clamp-2 min-h-[36px]" title={p.programName}>
                       {p.programName}
                     </h3>

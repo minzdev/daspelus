@@ -732,7 +732,7 @@ export default function ProgramDetailPage() {
                     </tr>
                     <tr className="bg-slate-50 text-slate-600 border-b text-[10px] font-semibold">
                       <th className="sticky left-0 bg-slate-50 z-30 px-4 py-2 text-left border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
-                        Nama Program / Diklat
+                        Kategori Diklat
                       </th>
                       <th className="px-3 py-2 text-center border-r">Jenis</th>
                       <th className="px-2 py-2 text-right bg-slate-100 text-slate-700">Pst</th>
@@ -780,7 +780,7 @@ export default function ProgramDetailPage() {
                     </tr>
                     <tr className="bg-slate-50 text-slate-600 border-b text-[10px] font-semibold">
                       <th className="sticky left-0 bg-slate-50 z-30 px-4 py-2 text-left border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
-                        Nama Program / Diklat
+                        Kategori Diklat
                       </th>
                       <th className="px-3 py-2 text-center border-r">Jenis</th>
                       <th className="px-2 py-2 text-right bg-slate-100 text-slate-700">Pst</th>
@@ -815,7 +815,7 @@ export default function ProgramDetailPage() {
                             : 'hover:bg-slate-50/80 bg-white'
                         )}
                       >
-                        {/* Kolom Nama Program (Sticky) */}
+                        {/* Kolom Kategori Diklat (Sticky) */}
                         <td
                           className={clsx(
                             'sticky left-0 z-20 px-4 py-2.5 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]',
