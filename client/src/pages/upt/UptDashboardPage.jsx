@@ -1,17 +1,40 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api, { apiError } from '../../lib/api'
 import {
   StatCard, StatusBadge, ProgressBar, EmptyState, SkeletonCards, SkeletonRows, Alert,
 } from '../../components/ui'
-import { IconPeople, IconGraduation, IconTarget, IconInput, IconChevronDown } from '../../components/icons'
+import { IconPeople, IconGraduation, IconTarget, IconInput, IconChevronDown, IconSearch } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
-import { fmtNum, yearOptions } from '../../utils/format'
+import { fmtNum, fmtPct, yearOptions } from '../../utils/format'
+
+const MONTH_LABEL = {
+  1: 'Januari', 2: 'Februari', 3: 'Maret', 4: 'April', 5: 'Mei', 6: 'Juni',
+  7: 'Juli', 8: 'Agustus', 9: 'September', 10: 'Oktober', 11: 'November', 12: 'Desember',
+}
+
+const MONTH_FILTER = [
+  { v: 0, label: 'Setahun' },
+  { v: 1, label: 'Jan' },
+  { v: 2, label: 'Feb' },
+  { v: 3, label: 'Mar' },
+  { v: 4, label: 'Apr' },
+  { v: 5, label: 'Mei' },
+  { v: 6, label: 'Jun' },
+  { v: 7, label: 'Jul' },
+  { v: 8, label: 'Agu' },
+  { v: 9, label: 'Sep' },
+  { v: 10, label: 'Okt' },
+  { v: 11, label: 'Nov' },
+  { v: 12, label: 'Des' },
+]
 
 export default function UptDashboardPage() {
   const { user } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
+  const [month, setMonth] = useState(0)
+  const [query, setQuery] = useState('')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,6 +63,47 @@ export default function UptDashboardPage() {
 
 
   const tTotal = (targetPeserta || 0) + (targetLulusan || 0)
+
+  // Rincian per program (tahun berjalan / bulan terpilih) + search
+  const programRows = useMemo(() => {
+    const list = data?.byProgram || []
+    const q = query.trim().toLowerCase()
+    return list
+      .map((p) => {
+        const tgt = (Number(p.target?.targetPeserta) || 0) + (Number(p.target?.targetLulusan) || 0)
+        let peserta = p.achievement?.totalPeserta || 0
+        let lulusan = p.achievement?.totalLulusan || 0
+        if (month >= 1) {
+          const mRow = p.achievement?.monthly?.find((m) => Number(m.month) === month)
+          peserta = mRow?.totalPeserta || 0
+          lulusan = mRow?.totalLulusan || 0
+        }
+        const total = peserta + lulusan
+        const pct = tgt > 0 ? Math.round((total / tgt) * 1000) / 10 : null
+        return {
+          id: p.programId,
+          name: p.programName || 'Program',
+          parent: p.parentName || '-',
+          target: tgt,
+          peserta,
+          lulusan,
+          total,
+          pct,
+        }
+      })
+      .filter((r) => {
+        if (!q) return true
+        return r.name.toLowerCase().includes(q) || r.parent.toLowerCase().includes(q)
+      })
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  }, [data, query, month])
+
+  const programTotals = useMemo(() => {
+    return programRows.reduce(
+      (s, r) => ({ target: s.target + r.target, peserta: s.peserta + r.peserta, lulusan: s.lulusan + r.lulusan, total: s.total + r.total }),
+      { target: 0, peserta: 0, lulusan: 0, total: 0 },
+    )
+  }, [programRows])
 
   // Tampilkan error state bila gagal memuat data
   if (error) {
@@ -139,7 +203,7 @@ export default function UptDashboardPage() {
 
       {loading ? (
         <>
-          <SkeletonCards count={4} />
+          <SkeletonCards count={3} />
           <div className="card mt-5"><SkeletonRows rows={6} /></div>
         </>
       ) : (
@@ -248,6 +312,104 @@ export default function UptDashboardPage() {
                   )
                 })()}
               </div>
+            </div>
+          </div>
+
+          <div>
+            {/* Rincian per program + search */}
+            <div className="card overflow-hidden">
+              <div className="card-header border-b border-surface-border pb-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                  <div>
+                    <h3 className="card-title">
+                      Per Program {month >= 1 ? MONTH_LABEL[month] : ''} {year}
+                    </h3>
+                    <p className="card-subtitle">
+                      {programRows.length} program · Total {fmtNum(programTotals.total)} dari {fmtNum(programTotals.target)} target
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative">
+                      <IconSearch className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-navy-300 pointer-events-none" />
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Cari program… mis. pembibitan"
+                        className="w-full sm:w-56 text-xs pl-8 pr-3 py-2 rounded-xl border border-surface-border bg-white focus:outline-none focus:ring-2 focus:ring-gold-400"
+                      />
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={month}
+                        onChange={(e) => setMonth(Number(e.target.value))}
+                        className="appearance-none cursor-pointer text-xs font-bold border border-surface-border rounded-xl py-2 pl-3 pr-8 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400"
+                      >
+                        {MONTH_FILTER.map((m) => (
+                          <option key={m.v} value={m.v}>{m.v === 0 ? `Setahun ${year}` : `${m.label} ${year}`}</option>
+                        ))}
+                      </select>
+                      <IconChevronDown className="h-4 w-4 absolute right-2 top-1/2 -translate-y-1/2 text-navy-300 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {programRows.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState
+                    icon={<IconSearch className="h-6 w-6" />}
+                    title={query ? 'Program tidak ditemukan' : 'Belum ada data program'}
+                    desc={query ? `Tidak ada program cocok "${query}".` : 'Isi realisasi agar rincian per program muncul di sini.'}
+                  />
+                </div>
+              ) : (
+                <div className="table-wrap overflow-x-auto">
+                  <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: '34%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '12%' }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th className="!text-left">Program</th>
+                        <th className="!text-right">Target</th>
+                        <th className="!text-right">Peserta</th>
+                        <th className="!text-right">Lulusan</th>
+                        <th className="!text-right">Total</th>
+                        <th className="!text-right">Capaian</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {programRows.map((r) => (
+                        <tr key={r.id}>
+                          <td>
+                            <p className="font-bold text-navy-900 truncate" title={r.name}>{r.name}</p>
+                            <p className="text-[11px] text-navy-400 truncate">{r.parent}</p>
+                          </td>
+                          <td className="td-number">{fmtNum(r.target)}</td>
+                          <td className="td-number">{fmtNum(r.peserta)}</td>
+                          <td className="td-number">{fmtNum(r.lulusan)}</td>
+                          <td className="td-number font-bold">{fmtNum(r.total)}</td>
+                          <td className="td-number font-bold">{r.pct != null ? fmtPct(r.pct) : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-navy-50/60 font-bold">
+                        <td className="!text-left">Total tampil</td>
+                        <td className="td-number">{fmtNum(programTotals.target)}</td>
+                        <td className="td-number">{fmtNum(programTotals.peserta)}</td>
+                        <td className="td-number">{fmtNum(programTotals.lulusan)}</td>
+                        <td className="td-number">{fmtNum(programTotals.total)}</td>
+                        <td className="td-number">—</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </>
