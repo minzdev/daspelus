@@ -471,7 +471,7 @@ export default function InputRealisasiPage() {
       <div className="animate-fadeUp">
         <div className="card p-12 text-center">
           <Spinner className="h-6 w-6 mx-auto text-navy-400" />
-          <p className="text-xs text-navy-400 mt-3">Memuat daftar program...</p>
+          <p className="text-xs text-navy-400 mt-3">Memuat daftar kategori diklat...</p>
         </div>
       </div>
     )
@@ -482,7 +482,7 @@ export default function InputRealisasiPage() {
       <div className="animate-fadeUp">
         <EmptyState
           icon={<IconLayers className="h-6 w-6" />}
-          title="Belum ada program"
+          title="Belum ada kategori diklat"
           desc="Admin BPSDMP belum menambahkan program aktif. Hubungi admin untuk menambahkan program di Master Program."
         />
       </div>
@@ -503,7 +503,7 @@ export default function InputRealisasiPage() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg md:text-xl font-black text-white tracking-tight">
-                  Input Realisasi Bulanan
+                  Input Realisasi Peserta dan Lulusan Bulan {MONTHS[month - 1]}
                 </h1>
                 {hasExisting && (
                   <span className={`rounded-full text-[10px] font-extrabold px-2.5 py-0.5 border ${
@@ -516,7 +516,7 @@ export default function InputRealisasiPage() {
                 )}
               </div>
               <p className="text-xs text-navy-200 mt-0.5 max-w-xl">
-                <strong className="text-white">{user?.upt?.name || 'UPT'}</strong> — Isi peserta &amp; lulusan per program diklat.
+                <strong className="text-white">{user?.upt?.name || 'UPT'}</strong> — Isi peserta &amp; lulusan per kategori diklat.
               </p>
             </div>
           </div>
@@ -622,19 +622,20 @@ export default function InputRealisasiPage() {
           <table className="w-full" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: '3.2%' }} />
-              <col style={{ width: '26%' }} />
-              <col style={{ width: '11.8%' }} />
-              <col style={{ width: '11.8%' }} />
-              <col style={{ width: '9.4%' }} />
-              <col style={{ width: '11.8%' }} />
-              <col style={{ width: '11.8%' }} />
-              <col style={{ width: '9.4%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '10.8%' }} />
+              <col style={{ width: '10.8%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '10.8%' }} />
+              <col style={{ width: '10.8%' }} />
+              <col style={{ width: '9%' }} />
             </colgroup>
             <thead>
               <tr className="bg-slate-900 text-white">
-                <th rowSpan={2} className="!text-white !border-slate-800 text-center align-middle !py-3 !px-2 text-[11px] font-bold tracking-wide">#</th>
+                <th rowSpan={2} className="!text-white !border-slate-800 text-center align-middle !py-3 !px-2 text-[11px] font-bold tracking-wide">No</th>
                 <th rowSpan={2} className="!text-white !border-slate-800 align-middle !py-3 !px-3 text-left text-[11px] font-bold tracking-widest uppercase">Kategori Diklat</th>
-                <th colSpan={3} className="text-center !text-white !bg-sky-700 !border-sky-800 !py-2.5">
+                <th colSpan={4} className="text-center !text-white !bg-sky-700 !border-sky-800 !py-2.5">
                   <span className="inline-flex items-center justify-center gap-1.5 text-[11px] font-black tracking-[0.08em] w-full"><span className="h-1.5 w-1.5 rounded-full bg-white/90" /> PESERTA</span>
                 </th>
                 <th colSpan={3} className="text-center !text-white !bg-emerald-700 !border-emerald-800 !py-2.5">
@@ -642,6 +643,7 @@ export default function InputRealisasiPage() {
                 </th>
               </tr>
               <tr>
+                <th title="Target PK peserta sebagai acuan" className="text-center !py-2.5 !px-1 !text-amber-800 bg-amber-50 border border-amber-200 text-[11px] font-black align-middle">PK</th>
                 <th className="text-center !py-2.5 !px-1 !text-sky-800 bg-sky-50 border border-sky-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Laki-laki <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-sky-800 bg-sky-50 border border-sky-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Perempuan <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-white bg-sky-600 border border-sky-600 text-[11px] font-black align-middle">TOTAL</th>
@@ -662,6 +664,14 @@ export default function InputRealisasiPage() {
                 const pesertaTotal = pesertaL + pesertaP
                 const lulusanTotal = lulusanL + lulusanP
                 const isInvalidRow = lulusanL > pesertaL || lulusanP > pesertaP
+                // Target PK peserta sebagai acuan kolom PK (induk = jumlah turunan)
+                const pkPeserta = (() => {
+                  if (p.isParent || parentsWithChildren.has(p.id)) {
+                    const kids = programs.filter((c) => c.parentId === p.id)
+                    return kids.reduce((s, k) => s + (targetSingle.byProgram[k.id]?.peserta || 0), 0)
+                  }
+                  return targetSingle.byProgram[p.id]?.peserta || 0
+                })()
 
                 return (
                   <React.Fragment key={p.id}>
@@ -719,6 +729,15 @@ export default function InputRealisasiPage() {
                           })()}
                         </div>
                       )}
+                    </td>
+                    {/* Target PK peserta (acuan, read-only) */}
+                    <td className="p-1">
+                      <div
+                        title="Target PK peserta"
+                        className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-amber-200 bg-amber-50 text-amber-900 h-[30px] flex items-center justify-center"
+                      >
+                        {pkPeserta > 0 ? fmtNum(pkPeserta) : '–'}
+                      </div>
                     </td>
                     {/* Peserta Laki-laki */}
                     <td className="p-1">
@@ -863,6 +882,19 @@ export default function InputRealisasiPage() {
                               </span>
                             </td>
                             <td className="p-1">
+                              {(() => {
+                                const dPk = Number(d.targetByProgram?.[p.id]?.targetPeserta) || Number(d.targetPeserta) || 0
+                                return (
+                                  <div
+                                    title="Target PK peserta diklat"
+                                    className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-amber-200/70 bg-amber-50/60 text-amber-900 h-[30px] flex items-center justify-center"
+                                  >
+                                    {dPk > 0 ? fmtNum(dPk) : '–'}
+                                  </div>
+                                )
+                              })()}
+                            </td>
+                            <td className="p-1">
                               <input inputMode="numeric" className={diklatInputCls(dPesertaL > 0)} placeholder="0" value={dv.pesertaL ?? '0'}
                                 onChange={(e) => handleDiklatNumChange(p.id, d.id, 'pesertaL', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Peserta Laki-laki`} />
                             </td>
@@ -891,7 +923,7 @@ export default function InputRealisasiPage() {
                           </tr>
                           {dInvalid && (
                             <tr>
-                              <td colSpan={8} className="bg-red-50 px-3 py-1 text-[10px] font-bold text-red-600 text-center">
+                              <td colSpan={9} className="bg-red-50 px-3 py-1 text-[10px] font-bold text-red-600 text-center">
                                 ⚠️ Lulusan tidak boleh &gt; Peserta pada diklat "{d.name}"
                               </td>
                             </tr>
@@ -901,7 +933,7 @@ export default function InputRealisasiPage() {
                     })}
                     {isInvalidRow && !isParentRow && (
                       <tr>
-                        <td colSpan={8} className="bg-red-50 px-3 py-1.5 text-[10px] font-bold text-red-600 text-center border-b border-red-200">
+                        <td colSpan={9} className="bg-red-50 px-3 py-1.5 text-[10px] font-bold text-red-600 text-center border-b border-red-200">
                           ⚠️ {lulusanL > pesertaL ? `Laki-laki ${lulusanL} > ${pesertaL}` : ''}{lulusanL > pesertaL && lulusanP > pesertaP ? ' & ' : ''}{lulusanP > pesertaP ? `Perempuan ${lulusanP} > ${pesertaP}` : ''} — Lulusan tidak boleh &gt; Peserta pada "{p.name}"
                         </td>
                       </tr>
@@ -946,7 +978,7 @@ export default function InputRealisasiPage() {
         {/* Action Bar (Simpan Draf & Preview/Kirim) */}
         <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-surface-border bg-surface-ground">
           <p className="text-xs text-navy-500 max-w-xl">
-            Isi <strong>0</strong> bila tidak ada data realisasi. Program ber-rincian diklat diisi <strong>per diklat</strong> — total program & induk menjumlah otomatis.
+            Isi <strong>0</strong> bila tidak ada data realisasi. Kategori ber-rincian diklat diisi <strong>per diklat</strong> — total kategori & induk menjumlah otomatis.
           </p>
           {!locked && targetApproved && (
             <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
