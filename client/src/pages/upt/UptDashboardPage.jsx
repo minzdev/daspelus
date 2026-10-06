@@ -7,7 +7,7 @@ import {
 } from '../../components/ui'
 import { IconPeople, IconGraduation, IconTarget, IconInput, IconChevronDown } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
-import { MONTHS, fmtNum, fmtPct, yearOptions } from '../../utils/format'
+import { fmtNum, yearOptions } from '../../utils/format'
 
 export default function UptDashboardPage() {
   const { user } = useAuth()
@@ -47,8 +47,8 @@ export default function UptDashboardPage() {
       <div className="animate-fadeUp">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Dashboard Capaian</h1>
-            <p className="page-desc">{user?.upt?.name}</p>
+            <h1 className="page-title">Dashboard Realisasi Peserta dan Lulusan</h1>
+            <p className="page-desc">Selamat datang kembali, {user?.name || 'Admin UPT'}!</p>
           </div>
         </div>
         <Alert type="error">{error}</Alert>
@@ -69,8 +69,8 @@ export default function UptDashboardPage() {
       <div className="animate-fadeUp">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Dashboard Capaian</h1>
-            <p className="page-desc">{user?.upt?.name}</p>
+            <h1 className="page-title">Dashboard Realisasi Peserta dan Lulusan</h1>
+            <p className="page-desc">Selamat datang kembali, {user?.name || 'Admin UPT'}!</p>
           </div>
         </div>
         <EmptyState
@@ -95,14 +95,14 @@ export default function UptDashboardPage() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  Dashboard Capaian Realisasi
+                  Dashboard Realisasi Peserta dan Lulusan
                 </h1>
                 <span className="rounded-full bg-gold-500/20 text-gold-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-gold-500/30">
                   Tahun {year}
                 </span>
               </div>
               <p className="text-xs text-navy-200 mt-0.5 max-w-2xl">
-                Selamat datang kembali, <strong className="text-white">{user?.name || 'Admin UPT'}</strong>! Realisasi peserta &amp; lulusan terhadap target Perjanjian Kinerja <span className="font-bold text-gold-300">{user?.upt?.name || 'UPT'}</span> ({user?.upt?.code || ''}).
+                Selamat datang kembali, <strong className="text-white">{user?.name || 'Admin UPT'}</strong>!
               </p>
             </div>
           </div>
@@ -145,37 +145,29 @@ export default function UptDashboardPage() {
       ) : (
         <>
           {/* Kartu statistik ringkasan UPT */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             <StatCard
               icon={<IconTarget className="h-6 w-6" />}
-              label="Target PK Peserta"
-              value={hasTarget ? fmtNum(targetPeserta) : '—'}
-              sub={hasTarget ? `Realisasi ${fmtNum(ach.totalPeserta)} (${fmtPct(ach.monthly.at(-1)?.pctPeserta)})` : 'Belum diatur — isi Input Diklat lalu Target PK'}
+              label="Target PK"
+              value={hasTarget ? fmtNum(tTotal) : '—'}
+              sub={hasTarget ? `Realisasi ${fmtNum(ach.totalKeseluruhan)}` : 'Belum diatur'}
               tone="navy"
-            />
-            <StatCard
-              icon={<IconTarget className="h-6 w-6" />}
-              label="Target PK Lulusan"
-              value={hasTarget ? fmtNum(targetLulusan) : '—'}
-              sub={hasTarget ? `Realisasi ${fmtNum(ach.totalLulusan)} (${fmtPct(ach.monthly.at(-1)?.pctLulusan)})` : 'Belum diatur — isi Input Diklat lalu Target PK'}
-              tone="gold"
-              delay={60}
             />
             <StatCard
               icon={<IconPeople className="h-6 w-6" />}
               label="Total Peserta"
               value={fmtNum(ach.totalPeserta)}
-              sub="Realisasi berjalan tahun ini"
+              sub="Tahun ini"
               tone="sky"
-              delay={120}
+              delay={60}
             />
             <StatCard
               icon={<IconGraduation className="h-6 w-6" />}
               label="Total Lulusan"
               value={fmtNum(ach.totalLulusan)}
-              sub="Realisasi berjalan tahun ini"
+              sub="Tahun ini"
               tone="emerald"
-              delay={180}
+              delay={120}
             />
           </div>
 
@@ -183,9 +175,9 @@ export default function UptDashboardPage() {
           <div className="card p-5 md:p-6 border-surface-border">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
-                <h3 className="card-title">Capaian Perjanjian Kinerja {year}</h3>
+                <h3 className="card-title">Capaian {year}</h3>
                 <p className="card-subtitle">
-                  Realisasi kumulatif terhadap target tahunan · <strong>{fmtNum(ach.totalKeseluruhan)}</strong> dari <strong>{hasTarget ? fmtNum(tTotal) : '—'}</strong> total target
+                  <strong>{fmtNum(ach.totalKeseluruhan)}</strong> dari <strong>{hasTarget ? fmtNum(tTotal) : '—'}</strong> target
                 </p>
               </div>
               <StatusBadge status={ach.yearlyStatus} />
@@ -203,56 +195,58 @@ export default function UptDashboardPage() {
           </div>
 
           <div>
-            {/* Tabel rekap bulanan UPT */}
+            {/* Grafik rekap bulanan UPT */}
             <div className="card overflow-hidden">
               <div className="card-header border-b border-surface-border pb-4">
-                <div>
-                  <h3 className="card-title">Rekap Bulanan {year}</h3>
-                  <p className="card-subtitle">Rincian per jenis kelamin &amp; status capaian bulanan</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="card-title">Grafik Bulanan {year}</h3>
+                    <p className="card-subtitle">Peserta &amp; lulusan per bulan</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-bold text-navy-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" /> Peserta
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> Lulusan
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="table-wrap overflow-x-auto">
-                <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-                  <colgroup>
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '14%' }} />
-                    <col style={{ width: '20%' }} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th className="!text-left">Bulan</th>
-                      <th className="!text-right">Peserta (L/P)</th>
-                      <th className="!text-right">Lulusan (L/P)</th>
-                      <th className="!text-right">Kumulatif</th>
-                      <th className="!text-left">Status Peserta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(ach?.monthly || []).map((m) => (
-                      <tr key={m.month}>
-                        <td className="font-semibold text-navy-900">{MONTHS[m.month - 1]}</td>
-                        <td className="td-number">
-                          {m.hasData ? (
-                            <span className="block truncate">{fmtNum(m.pesertaL)} / {fmtNum(m.pesertaP)}</span>
-                          ) : (
-                            <span className="text-navy-300">—</span>
-                          )}
-                        </td>
-                        <td className="td-number">
-                          {m.hasData ? (
-                            <span className="block truncate">{fmtNum(m.lulusanL)} / {fmtNum(m.lulusanP)}</span>
-                          ) : (
-                            <span className="text-navy-300">—</span>
-                          )}
-                        </td>
-                        <td className="td-number font-bold">{fmtNum(m.cumPeserta + m.cumLulusan)}</td>
-                        <td><StatusBadge status={m.statusPeserta} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-4 md:p-5">
+                {(() => {
+                  const rows = ach?.monthly || []
+                  const maxVal = Math.max(1, ...rows.map((m) => Math.max(m.totalPeserta || 0, m.totalLulusan || 0)))
+                  const short = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+                  if (!rows.some((m) => m.hasData)) {
+                    return <p className="text-sm text-navy-400 text-center py-6">Belum ada realisasi tahun ini.</p>
+                  }
+                  return (
+                    <div className="flex items-end gap-1.5 sm:gap-2.5 h-48" role="img" aria-label={`Grafik realisasi bulanan ${year}`}>
+                      {rows.map((m) => {
+                        const pH = Math.round(((m.totalPeserta || 0) / maxVal) * 100)
+                        const lH = Math.round(((m.totalLulusan || 0) / maxVal) * 100)
+                        return (
+                          <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                            <div className="flex items-end justify-center gap-1 h-36 w-full">
+                              <div
+                                className="w-3 sm:w-4 rounded-t-md bg-sky-500 transition-all"
+                                style={{ height: `${Math.max(m.hasData ? 4 : 0, pH)}%` }}
+                                title={`${short[m.month - 1]} — Peserta: ${fmtNum(m.totalPeserta)}`}
+                              />
+                              <div
+                                className="w-3 sm:w-4 rounded-t-md bg-emerald-500 transition-all"
+                                style={{ height: `${Math.max(m.hasData ? 4 : 0, lH)}%` }}
+                                title={`${short[m.month - 1]} — Lulusan: ${fmtNum(m.totalLulusan)}`}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-navy-500">{short[m.month - 1]}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>

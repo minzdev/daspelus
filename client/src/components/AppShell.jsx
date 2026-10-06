@@ -109,7 +109,7 @@ const UPT_NAV = [
   {
     section: 'Utama',
     items: [
-      { to: '/upt', label: 'Dashboard Capaian', icon: IconDashboard, end: true },
+      { to: '/upt', label: 'Dashboard Realisasi', icon: IconDashboard, end: true },
     ],
   },
   {
