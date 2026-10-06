@@ -139,6 +139,8 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
     monthlyByProg.set(p.id, monthsMap);
   }
 
+  // Kumpulkan target tahunan (month=0) per program sebagai fallback bila tidak ada target bulanan
+  const annualTgtByProg = new Map(); // programId -> { tp, tl }
   for (const t of targetDocs) {
     if (!t.programId) continue;
     const mNum = Number(t.month);
@@ -149,6 +151,12 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
         e.targetPeserta += (Number(t.targetPeserta) || 0);
         e.targetLulusan += (Number(t.targetLulusan) || 0);
       }
+    } else if (mNum === 0) {
+      const prev = annualTgtByProg.get(t.programId) || { tp: 0, tl: 0 };
+      annualTgtByProg.set(t.programId, {
+        tp: prev.tp + (Number(t.targetPeserta) || 0),
+        tl: prev.tl + (Number(t.targetLulusan) || 0),
+      });
     }
   }
 
@@ -163,6 +171,21 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
         e.pesertaP += (Number(r.pesertaP) || 0);
         e.lulusanL += (Number(r.lulusanL) || 0);
         e.lulusanP += (Number(r.lulusanP) || 0);
+      }
+    }
+  }
+
+  // Bila tidak ada target bulanan (single annual), distribusikan target tahunan ke setiap bulan
+  // sehingga kolom "TARGET PK" di laporan bulanan tidak kosong (0).
+  const hasAnyMonthlyTarget = targetDocs.some((t) => Number(t.month) >= 1);
+  if (!hasAnyMonthlyTarget) {
+    for (const [progId, ann] of annualTgtByProg.entries()) {
+      const pMap = monthlyByProg.get(progId);
+      if (!pMap) continue;
+      for (let m = 1; m <= 12; m++) {
+        const e = pMap.get(m);
+        e.targetPeserta = ann.tp;
+        e.targetLulusan = ann.tl;
       }
     }
   }
@@ -232,9 +255,6 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
   }
   for (const [, arr] of diklatDetailsByProg) arr.sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
-  // SINGLE-INPUT: bila tidak ada target bulanan sama sekali tapi ada single (month=0),
-  // tampilkan single sebagai acuan periode agar laporan bulanan tidak kosong (0).
-  const hasAnyMonthlyTarget = targetDocs.some((t) => Number(t.month) >= 1);
   const rows = visibleFlat.map((fp) => {
     const r = realByProg.get(fp.id) || { ...ZERO_REAL };
     const t = tgtByProg.get(fp.id) || { tpBulanan: 0, tlBulanan: 0, tpTahunan: 0, tlTahunan: 0 };

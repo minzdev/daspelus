@@ -553,7 +553,7 @@ export default function AdminApprovalHubPage() {
         onConfirm: async () => {
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/submissions/${item.rawId}/lock`)
+            const { data } = await api.patch(`/submissions/${item.rawId}/approve-bpsdmp`)
             toast.success('Laporan Resmi Dikunci', data.message)
             await loadAll()
             setRealisasiModalOpen(false)

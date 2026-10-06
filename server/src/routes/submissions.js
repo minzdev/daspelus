@@ -128,7 +128,7 @@ router.patch("/:id/approve", async (req, res) => {
 });
 
 /** PATCH /api/submissions/:id/approve-bpsdmp - BPSDMP / Pusbang approve -> locked */
-router.patch("/:id/approve-bpsdmp", async (req, res) => {
+async function approveBpsdmp(req, res) {
   const user = req.user;
   if (!isSuperAdmin(user) && !isPusbang(user)) return res.status(403).json({ error: "Hanya Super Admin BPSDMP atau Pusbang yang dapat menyetujui." });
   try {
@@ -158,7 +158,11 @@ router.patch("/:id/approve-bpsdmp", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Gagal menyetujui laporan." });
   }
-});
+}
+router.patch("/:id/approve-bpsdmp", approveBpsdmp);
+// Alias kompatibilitas: frontend lama pernah memanggil /:id/lock — arahkan ke handler yang sama
+// agar cache build lama di production tidak 404 "Endpoint tidak ditemukan".
+router.patch("/:id/lock", approveBpsdmp);
 
 /** PATCH /api/submissions/:id/reject - Pimpinan / Admin / Pusbang reject */
 router.patch("/:id/reject", async (req, res) => {

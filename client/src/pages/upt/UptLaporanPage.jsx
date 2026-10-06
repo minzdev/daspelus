@@ -1430,16 +1430,16 @@ export default function UptLaporanPage() {
                               const lTot = (bm.lulusanL || 0) + (bm.lulusanP || 0)
                               return (
                                 <React.Fragment key={mNum}>
-                                  <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px] text-slate-400">0</td>
+                                  <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px] text-slate-500 font-medium">{fmtNum(d.targetPeserta)}</td>
                                   <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px]">{fmtNum(bm.pesertaL)}</td>
                                   <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px]">{fmtNum(bm.pesertaP)}</td>
                                   <td className="text-center border border-slate-300 px-1 py-1 font-bold tabular-nums text-[9px]">{fmtNum(pTot)}</td>
-                                  <td className="text-center border border-slate-300 px-1 py-1 text-[9px] tabular-nums text-slate-400">-</td>
-                                  <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px] text-slate-400">0</td>
+                                  <td className={clsx('text-center border border-slate-300 px-1 py-1 text-[9px] tabular-nums', pctColor(pTot, d.targetPeserta))}>{pctText(pTot, d.targetPeserta)}</td>
+                                  <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px] text-slate-500 font-medium">{fmtNum(d.targetLulusan)}</td>
                                   <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px]">{fmtNum(bm.lulusanL)}</td>
                                   <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[9px]">{fmtNum(bm.lulusanP)}</td>
                                   <td className="text-center border border-slate-300 px-1 py-1 font-bold tabular-nums text-[9px]">{fmtNum(lTot)}</td>
-                                  <td className="text-center border border-slate-300 border-r-2 border-r-slate-500 px-1 py-1 text-[9px] tabular-nums text-slate-400">-</td>
+                                  <td className={clsx('text-center border border-slate-300 border-r-2 border-r-slate-500 px-1 py-1 text-[9px] tabular-nums', pctColor(lTot, d.targetLulusan))}>{pctText(lTot, d.targetLulusan)}</td>
                                 </React.Fragment>
                               )
                             })}
