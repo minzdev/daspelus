@@ -14,7 +14,7 @@ import {
   IconCheck,
 } from '../../components/icons'
 import { useToast } from '../../components/Toast'
-import { fmtNum, yearOptions } from '../../utils/format'
+import { fmtNum, fmtDate, yearOptions } from '../../utils/format'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
 
 function parseNum(s) {
@@ -47,6 +47,7 @@ export default function TargetPkUptPage() {
   const [myTarget, setMyTarget] = useState(null)
   const [upt, setUpt] = useState(null)
   const [targetSubmissions, setTargetSubmissions] = useState([])
+  const [revisions, setRevisions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const toast = useToast()
@@ -79,6 +80,7 @@ export default function TargetPkUptPage() {
       setDiklats(data.diklats || [])
       setUpt(data.upt || null)
       setTargetSubmissions(data.targetSubmissions || [])
+      setRevisions(data.revisions || [])
     } catch (err) {
       setError(apiError(err))
     } finally {
@@ -981,6 +983,51 @@ export default function TargetPkUptPage() {
           </div>
         </div>
       </div>
+
+      {/* Riwayat Target PK: Awal (pengisian pertama) vs Revisi (terkini).
+          Angka berjalan & laporan selalu memakai yang terkini. */}
+      {revisions.length > 0 && (() => {
+        const first = revisions[0]
+        const last = revisions[revisions.length - 1]
+        const revised = revisions.length > 1
+        return (
+          <div className="card rounded-2xl border border-slate-200/60 shadow-sm bg-white px-5 py-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="h-8 w-8 rounded-xl bg-navy-900 text-gold-300 flex items-center justify-center text-sm">◷</span>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">Riwayat Target PK {year}</h3>
+                <p className="text-xs text-slate-500">Pengisian pertama = Target Awal · {revised ? `${revisions.length - 1}× revisi` : 'belum ada revisi'}</p>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target Awal</p>
+                <p className="mt-1 text-sm font-black tabular-nums text-slate-900">
+                  <span className="text-sky-700">P: {fmtNum(first.peserta)}</span>
+                  <span className="text-slate-300 mx-1">·</span>
+                  <span className="text-emerald-700">L: {fmtNum(first.lulusan)}</span>
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{first.at ? fmtDate(first.at) : ''}</p>
+              </div>
+              <div className={`rounded-xl border px-4 py-3 ${revised ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50/60'}`}>
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target Revisi {revised ? `(ke-${last.no - 1})` : ''}</p>
+                {revised ? (
+                  <>
+                    <p className="mt-1 text-sm font-black tabular-nums text-slate-900">
+                      <span className="text-sky-700">P: {fmtNum(last.peserta)}</span>
+                      <span className="text-slate-300 mx-1">·</span>
+                      <span className="text-emerald-700">L: {fmtNum(last.lulusan)}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{last.at ? fmtDate(last.at) : ''}</p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-400 italic">Belum ada revisi — masih memakai Target Awal.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Tabel rincian & Toolbar */}
       <div className="card rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden bg-white">

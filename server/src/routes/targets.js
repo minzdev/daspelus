@@ -407,7 +407,24 @@ router.get("/my", requireUpt, async (req, res) => {
     const targetSubmissions = subSnap.map((s) => s.toJSON());
     const isApproved = subSnap.some((s) => Number(s.month) === 0 && s.status === "approved");
 
-    res.json({ year, programs, target, diklats, upt: uptDoc.toJSON(), approvedMonths: [...approvedMonths], targetSubmissions, isApproved });
+    // Riwayat Target PK: Target Awal (revisi #1) vs Target Revisi (terkini)
+    const revisionDocs = await TargetRevision.findAll({
+      where: { uptId, year },
+      order: [["revisionNo", "ASC"]],
+    });
+    const revisions = revisionDocs.map((r) => {
+      const j = r.toJSON();
+      const p = Number(j.targetPeserta) || 0;
+      const l = Number(j.targetLulusan) || 0;
+      return {
+        no: Number(j.revisionNo) || 0,
+        peserta: p, lulusan: l, total: p + l,
+        at: j.createdAt || null,
+        trigger: j.trigger || null,
+      };
+    });
+
+    res.json({ year, programs, target, diklats, upt: uptDoc.toJSON(), approvedMonths: [...approvedMonths], targetSubmissions, isApproved, revisions });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Gagal mengambil target PK Anda." });
@@ -590,7 +607,8 @@ router.put("/my", requireUpt, async (req, res) => {
     }
 
     audit(req, "SAVE_TARGET", "target", `${uptId}_${y}`, { year: y, programs: setCount });
-    await recordTargetRevision({ uptId, year: y, trigger: "save", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
+    // Pengisian pertama (belum pernah submit) = Target Awal; simpan berikutnya = Target Revisi
+    await recordTargetRevision({ uptId, year: y, trigger: tSub ? "revision" : "save", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
     res.json({
       message: `Target PK ${y} tersimpan — ${setCount} program (${diklatTargets.length} rincian diklat). Satu kali input, siap dikirim ke Pimpinan.`,
     });
@@ -812,7 +830,7 @@ router.post("/import", requireUpt, async (req, res) => {
     }
 
     audit(req, "IMPORT_TARGET_PK", "target", `${uptId}_${y}`, { year: y, updated: updatedCount, created: createdCount });
-    await recordTargetRevision({ uptId, year: y, trigger: "import", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
+    await recordTargetRevision({ uptId, year: y, trigger: tSub ? "revision" : "import", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
     res.json({
       message: `Berhasil import Target PK: ${createdCount} diklat baru dibuat, ${updatedCount} target diklat diperbarui (${savedProgs} program terdata).`,
       createdCount,
