@@ -15,8 +15,8 @@ const MATRA_OPTIONS = [
 ]
 
 const UPT_TYPE_OPTIONS = [
-  { value: 'taruna', label: 'Taruna — Sekolah Tinggi, Politeknik, Akademi, Balai', short: 'Taruna', icon: '⚓', desc: 'Memiliki taruna dari matra darat/laut/udara' },
-  { value: 'aparatur', label: 'Aparatur — Pusbang dan BP3KSDMP', short: 'Aparatur', icon: '🏢', desc: 'Unit pelaksana untuk diklat aparatur' },
+  { value: 'taruna', label: 'Taruna — Sekolah Tinggi, Politeknik, Akademi, Balai', short: 'Taruna', icon: '⚓' },
+  { value: 'aparatur', label: 'Aparatur — Pusbang dan BP3KSDMP', short: 'Aparatur', icon: '🏢' },
 ]
 
 const EMPTY_FORM = { code: '', name: '', matra: '', uptType: 'taruna' }
@@ -431,7 +431,7 @@ export default function DataUptPage() {
               }}
             >
               {UPT_TYPE_OPTIONS.map((t) => (
-                <option key={t.value} value={t.value}>{t.icon} {t.label} — {t.desc}</option>
+                <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
               ))}
             </select>
           </FormField>
