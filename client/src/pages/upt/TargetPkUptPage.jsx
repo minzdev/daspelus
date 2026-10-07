@@ -35,10 +35,10 @@ function normalizeProgString(s) {
 }
 
 /**
- * UPT — Target PK SINGLE-INPUT (cukup 1 nilai Target PK, tanpa peserta & lulusan terpisah).
+ * UPT — Target PK SINGLE-INPUT per tahun, TERPISAH Peserta & Lulusan.
  * Alur:
- * - Bisa atur langsung di tabel / modal.
- * - Bisa unduh template Excel & import sekaligus (No, Program Tujuan, Nama Diklat, Target PK).
+ * - Bisa atur langsung di tabel / modal (kolom Target Peserta & Target Lulusan, Lulusan ≤ Peserta).
+ * - Bisa unduh template Excel & import sekaligus (No, Program Tujuan, Nama Diklat, Target Peserta, Target Lulusan).
  */
 export default function TargetPkUptPage() {
   const [year, setYear] = useState(new Date().getFullYear())
@@ -51,7 +51,7 @@ export default function TargetPkUptPage() {
   const [error, setError] = useState('')
   const toast = useToast()
 
-  // Modal Atur Target
+  // Modal Atur Target (nilai { p: peserta, l: lulusan } per kunci)
   const [modalOpen, setModalOpen] = useState(false)
   const [diklatForm, setDiklatForm] = useState({})
   const [progForm, setProgForm] = useState({})
@@ -169,41 +169,50 @@ export default function TargetPkUptPage() {
   )
   const isLocked = submission && ['pending_pimpinan', 'pending_bpsdmp', 'approved'].includes(submission.status)
 
-  // Nilai form: diklat terikat per kombinasi (programId, diklatId)
-  function diklatVal(pid, dId) {
+  // Nilai form diklat: { p: peserta, l: lulusan } — fallback ke data tersimpan (terpisah P/L)
+  function diklatValPL(pid, dId) {
     const key = `${pid}_${dId}`
     const f = diklatForm[key]
-    if (f !== undefined && String(f).trim() !== '') return String(f).trim()
     const saved = diklatById.get(dId)
-    if (saved) {
-      const tbp = (saved.targetByProgram && typeof saved.targetByProgram === 'object') ? saved.targetByProgram[pid] : null
-      if (tbp && (tbp.targetPk !== undefined || tbp.targetPeserta !== undefined)) {
-        return String(tbp.targetPk ?? tbp.targetPeserta ?? 0)
-      }
-      return String(saved.targetPeserta || saved.targetLulusan || 0)
-    }
-    return '0'
+    const tbp = (saved?.targetByProgram && typeof saved.targetByProgram === 'object') ? saved.targetByProgram[pid] : null
+    // Data lama single-value menyimpan targetPeserta == targetLulusan — tetap terbaca benar
+    const savedP = tbp?.targetPeserta ?? tbp?.targetPk ?? saved?.targetPeserta ?? 0
+    const savedL = tbp?.targetLulusan ?? tbp?.targetPk ?? saved?.targetLulusan ?? 0
+    const p = (f?.p !== undefined && String(f.p).trim() !== '') ? String(f.p).trim() : String(savedP ?? 0)
+    const l = (f?.l !== undefined && String(f.l).trim() !== '') ? String(f.l).trim() : String(savedL ?? 0)
+    return { p, l }
   }
 
-  // Nilai program: INDUK = auto-sum turunan (+ diklat langsung bila ada); TURUNAN ber-diklat = auto-sum diklat; TURUNAN tanpa diklat = input langsung
-  function progVal(pid, _seen = new Set()) {
+  function setDiklatFormPL(pid, dId, which, raw) {
+    const key = `${pid}_${dId}`
+    const cleaned = String(raw ?? '').replace(/[^0-9]/g, '')
+    setDiklatForm((f) => ({ ...f, [key]: { ...(f[key] || {}), [which]: cleaned } }))
+  }
+
+  // Nilai program terpisah P/L: INDUK = auto-sum turunan (+ diklat langsung bila ada); TURUNAN ber-diklat = auto-sum diklat; langsung = input/form
+  function progValPL(pid, which, _seen = new Set()) {
     if (_seen.has(pid)) return '0'
     _seen.add(pid)
     let total = 0
     if (parentsWithChildren.has(pid)) {
       const kids = childIdsByParent.get(pid) || []
-      total += kids.reduce((s, kid) => s + (Number(progVal(kid, new Set(_seen))) || 0), 0)
+      total += kids.reduce((s, kid) => s + (Number(progValPL(kid, which, new Set(_seen))) || 0), 0)
     }
     const list = diklatByProgram.get(pid) || []
     if (list.length > 0) {
-      total += list.reduce((s, d) => s + (Number(diklatVal(pid, d.id)) || 0), 0)
+      total += list.reduce((s, d) => s + (Number(diklatValPL(pid, d.id)[which]) || 0), 0)
     } else if (!parentsWithChildren.has(pid)) {
-      const f = progForm[pid]
+      const f = progForm[pid]?.[which]
       if (f !== undefined && String(f).trim() !== '') return String(f).trim()
       const saved = itemsByPid.get(pid)
-      if (saved) return String(saved.targetPeserta || saved.targetLulusan || 0)
+      if (saved) return String(which === 'p' ? (saved.targetPeserta ?? 0) : (saved.targetLulusan ?? 0))
     }
     return String(total)
+  }
+
+  function setProgFormPL(pid, which, raw) {
+    const cleaned = String(raw ?? '').replace(/[^0-9]/g, '')
+    setProgForm((f) => ({ ...f, [pid]: { ...(f[pid] || {}), [which]: cleaned } }))
   }
 
   function openModal() {
@@ -213,54 +222,37 @@ export default function TargetPkUptPage() {
     setModalOpen(true)
   }
 
-  const previewTotal = useMemo(() => {
-    let tot = 0
-    for (const p of leafPrograms) {
-      tot += Number(progVal(p.id)) || 0
-    }
-    return tot
-  }, [leafPrograms, diklatForm, progForm, diklats, myTarget, diklatByProgram]) // eslint-disable-line react-hooks/exhaustive-deps
-
   async function handleSubmit(e, andSend = false) {
     if (e) e.preventDefault()
     setFormError('')
     const diklatTargets = []
 
-    // Kumpulkan target per diklat per program
+    // Kumpulkan target PESERTA & LULUSAN per diklat per program (Lulusan ≤ Peserta)
+    const collectDiklat = (pid, list, contextName) => {
+      for (const d of list) {
+        const { p, l } = diklatValPL(pid, d.id)
+        const valP = parseNum(p) || 0
+        const valL = parseNum(l) || 0
+        if (!Number.isFinite(valP) || !Number.isFinite(valL) || valP < 0 || valL < 0) {
+          setFormError(`Diklat "${d.name}" di "${contextName}" harus berupa angka ≥ 0.`)
+          return false
+        }
+        if (valL > valP) {
+          setFormError(`Diklat "${d.name}" di "${contextName}": Lulusan (${valL}) tidak boleh lebih besar dari Peserta (${valP}).`)
+          return false
+        }
+        diklatTargets.push({ diklatId: d.id, programId: pid, targetPeserta: valP, targetLulusan: valL })
+      }
+      return true
+    }
     for (const p of leafPrograms) {
       const rincian = diklatByProgram.get(p.id) || []
-      for (const d of rincian) {
-        const v = diklatVal(p.id, d.id)
-        const val = parseNum(v) || 0
-        if (!Number.isFinite(val) || val < 0) {
-          setFormError(`Diklat "${d.name}" di "${p.name}" harus berupa angka Target PK ≥ 0.`)
-          return
-        }
-        diklatTargets.push({
-          diklatId: d.id,
-          programId: p.id,
-          target: val,
-          targetPk: val,
-          targetPeserta: val,
-          targetLulusan: val,
-        })
-      }
+      if (!collectDiklat(p.id, rincian, p.name)) return
     }
     for (const g of parentGroups) {
       if (g.parentId && g.children.length === 0) {
         const rincian = diklatByProgram.get(g.parentId) || []
-        for (const d of rincian) {
-          const v = diklatVal(g.parentId, d.id)
-          const val = parseNum(v) || 0
-          diklatTargets.push({
-            diklatId: d.id,
-            programId: g.parentId,
-            target: val,
-            targetPk: val,
-            targetPeserta: val,
-            targetLulusan: val,
-          })
-        }
+        if (!collectDiklat(g.parentId, rincian, g.parentName || g.parent?.name || 'Induk')) return
       }
     }
 
@@ -268,28 +260,28 @@ export default function TargetPkUptPage() {
     for (const p of leafPrograms) {
       const hasDiklat = (diklatByProgram.get(p.id) || []).length > 0
       if (hasDiklat) continue
-      const f = progForm[p.id]
+      const f = progForm[p.id] || {}
       const saved = itemsByPid.get(p.id)
-      const valStr = f !== undefined ? String(f ?? '').trim() : ''
-      if (f === undefined && !saved) continue
-      const val = valStr !== '' ? parseNum(valStr) : saved ? Number(saved.targetPeserta || saved.targetLulusan || 0) : 0
-      if (!Number.isFinite(val) || val < 0) {
-        setFormError(`Target "${p.name}" harus berupa angka Target PK ≥ 0.`)
+      const strP = f.p !== undefined ? String(f.p ?? '').trim() : ''
+      const strL = f.l !== undefined ? String(f.l ?? '').trim() : ''
+      if (f.p === undefined && f.l === undefined && !saved) continue
+      const valP = strP !== '' ? parseNum(strP) : Number(saved?.targetPeserta ?? 0)
+      const valL = strL !== '' ? parseNum(strL) : Number(saved?.targetLulusan ?? 0)
+      if (!Number.isFinite(valP) || !Number.isFinite(valL) || valP < 0 || valL < 0) {
+        setFormError(`Target "${p.name}" harus berupa angka ≥ 0.`)
         return
       }
-      if (f !== undefined || val > 0) {
-        items.push({
-          programId: p.id,
-          target: val || 0,
-          targetPk: val || 0,
-          targetPeserta: val || 0,
-          targetLulusan: val || 0,
-        })
+      if (valL > valP) {
+        setFormError(`Target "${p.name}": Lulusan (${valL}) tidak boleh lebih besar dari Peserta (${valP}).`)
+        return
+      }
+      if (f.p !== undefined || f.l !== undefined || valP > 0 || valL > 0) {
+        items.push({ programId: p.id, targetPeserta: valP || 0, targetLulusan: valL || 0 })
       }
     }
 
     if (!diklatTargets.length && !items.length) {
-      setFormError('Isi Target PK minimal untuk satu diklat atau satu program.')
+      setFormError('Isi Target Peserta & Lulusan minimal untuk satu diklat atau satu program.')
       return
     }
 
@@ -433,25 +425,26 @@ export default function TargetPkUptPage() {
         { header: 'NO', key: 'no', width: 6 },
         { header: 'PROGRAM TUJUAN', key: 'program', width: 34 },
         { header: 'NAMA DIKLAT', key: 'name', width: 44 },
-        { header: 'TARGET PK', key: 'target', width: 18 },
+        { header: 'TARGET PESERTA', key: 'targetPeserta', width: 18 },
+        { header: 'TARGET LULUSAN', key: 'targetLulusan', width: 18 },
       ]
 
-      ws.mergeCells('A1:D1')
+      ws.mergeCells('A1:E1')
       const tCell = ws.getCell('A1')
       tCell.value = `TEMPLATE IMPORT TARGET PK — ${upt?.code || 'UPT'} ${upt?.name || ''} (${year})`
       tCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF0F172A' } }
       tCell.alignment = { horizontal: 'center', vertical: 'middle' }
       ws.getRow(1).height = 24
 
-      ws.mergeCells('A2:D2')
+      ws.mergeCells('A2:E2')
       const sCell = ws.getCell('A2')
-      sCell.value = 'Petunjuk: Isi nama kategori diklat di kolom PROGRAM TUJUAN, nama diklat di kolom NAMA DIKLAT, dan angka Target PK di kolom TARGET PK.'
+      sCell.value = 'Petunjuk: Isi nama kategori diklat di kolom PROGRAM TUJUAN, nama diklat di kolom NAMA DIKLAT, lalu angka TARGET PESERTA dan TARGET LULUSAN (Lulusan ≤ Peserta).'
       sCell.font = { name: 'Calibri', size: 9.5, italic: true, color: { argb: 'FF475569' } }
       sCell.alignment = { horizontal: 'center', vertical: 'middle' }
       ws.getRow(2).height = 18
 
       const hdr = ws.getRow(4)
-      hdr.values = ['NO', 'PROGRAM TUJUAN', 'NAMA DIKLAT', 'TARGET PK']
+      hdr.values = ['NO', 'PROGRAM TUJUAN', 'NAMA DIKLAT', 'TARGET PESERTA', 'TARGET LULUSAN']
       hdr.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
       hdr.height = 24
       hdr.eachCell((c) => {
@@ -472,7 +465,7 @@ export default function TargetPkUptPage() {
 
       samplePrograms.forEach((sp) => {
         const row = ws.getRow(rIdx++)
-        row.values = [exCount++, sp.name, `Contoh Nama Diklat di ${sp.name}`, 50]
+        row.values = [exCount++, sp.name, `Contoh Nama Diklat di ${sp.name}`, 50, 45]
         row.height = 20
         row.eachCell((c, col) => {
           c.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } }
@@ -582,6 +575,7 @@ export default function TargetPkUptPage() {
         const low2 = c2.toLowerCase()
         const low3 = c3.toLowerCase()
         const low4 = c4.toLowerCase()
+        const low5 = c5.toLowerCase()
 
         // Lewati baris judul template atau petunjuk
         if (
@@ -592,10 +586,12 @@ export default function TargetPkUptPage() {
           return
         }
 
-        // Lewati baris header tabel
+        // Lewati baris header tabel (template baru 5 kolom & template lama 4/3 kolom)
         if (
-          low2 === 'program tujuan' || low3 === 'nama diklat' || low4 === 'target pk' ||
-          low2 === 'nama diklat' || low3 === 'target pk' ||
+          low2 === 'program tujuan' || low3 === 'nama diklat' ||
+          low4 === 'target pk' || low4 === 'target peserta' || low4 === 'target lulusan' ||
+          low5 === 'target lulusan' ||
+          low2 === 'nama diklat' || low3 === 'target pk' || low3 === 'target peserta' ||
           low1 === 'no' || low1 === 'nomor' ||
           (low2.startsWith('contoh:') && low3.startsWith('contoh:'))
         ) {
@@ -603,34 +599,40 @@ export default function TargetPkUptPage() {
           return
         }
 
-        // Pola 1: Template Resmi 4 Kolom (Kolom 1: No, Kolom 2: Program, Kolom 3: Nama Diklat, Kolom 4: Target PK)
+        // Pola 1: Template Resmi (No, Program, Nama Diklat, Target Peserta, Target Lulusan).
+        // Template lama 4 kolom (kolom 4 = Target PK tunggal) tetap dibaca: Lulusan = Peserta.
         if (c2 && c3) {
           const matchedProg = matchProgramClient(c2)
           if (matchedProg) {
             const dName = c3.length > 150 ? c3.slice(0, 150) : c3
-            const target = parseTargetNum(row.getCell(4).value ?? c4)
+            const valP = parseTargetNum(row.getCell(4).value ?? c4) || 0
+            const valL = c5 !== '' ? (parseTargetNum(row.getCell(5).value ?? c5) || 0) : valP
             parsed.push({
               rowNum: rowNumber,
               name: dName,
               programId: matchedProg.id,
               programName: matchedProg.name,
-              target,
+              targetPeserta: valP,
+              targetLulusan: valL,
             })
             return
           }
         }
 
-        // Pola 2: Format 3 Kolom (Kolom 1: Program, Kolom 2: Nama Diklat, Kolom 3: Target PK)
+        // Pola 2: Format ringkas (Kolom 1: Program, Kolom 2: Nama Diklat, Kolom 3: Target).
+        // Format lama: 1 angka untuk Peserta & Lulusan. Format baru: kolom 4 = Lulusan bila ada.
         if (c1 && c2 && isNaN(Number(c2))) {
           const matchedProg = matchProgramClient(c1)
           if (matchedProg) {
-            const target = parseTargetNum(row.getCell(3).value ?? c3)
+            const valP = parseTargetNum(row.getCell(3).value ?? c3) || 0
+            const valL = c4 !== '' ? (parseTargetNum(row.getCell(4).value ?? c4) || 0) : valP
             parsed.push({
               rowNum: rowNumber,
               name: c2.slice(0, 150),
               programId: matchedProg.id,
               programName: matchedProg.name,
-              target,
+              targetPeserta: valP,
+              targetLulusan: valL,
             })
             return
           }
@@ -655,13 +657,15 @@ export default function TargetPkUptPage() {
             skippedCount += 1
             return
           }
-          const target = parseTargetNum(row.getCell(4).value ?? row.getCell(3).value ?? row.getCell(5).value ?? c4 ?? c3 ?? c5)
+          const tp = parseTargetNum(row.getCell(4).value ?? c4) || parseTargetNum(row.getCell(3).value ?? c3) || 0
+          const tl = c5 !== '' ? (parseTargetNum(row.getCell(5).value ?? c5) || 0) : tp
           parsed.push({
             rowNum: rowNumber,
             name: possibleDiklatName.slice(0, 150),
             programId: activeProgram.id,
             programName: activeProgram.name,
-            target,
+            targetPeserta: tp,
+            targetLulusan: tl,
           })
           return
         }
@@ -684,7 +688,7 @@ export default function TargetPkUptPage() {
       }
 
       if (!uniqueItems.length) {
-        throw new Error('Tidak ada baris data diklat yang terbaca dari file Excel. Pastikan mengisi kolom PROGRAM TUJUAN, NAMA DIKLAT, dan TARGET PK.')
+        throw new Error('Tidak ada baris data diklat yang terbaca dari file Excel. Pastikan mengisi kolom PROGRAM TUJUAN, NAMA DIKLAT, TARGET PESERTA, dan TARGET LULUSAN.')
       }
 
       setImportParsedItems(uniqueItems)
@@ -698,10 +702,19 @@ export default function TargetPkUptPage() {
 
   async function handleImportSubmit() {
     setImportSending(true)
+    setImportError('')
     try {
       const validItems = importParsedItems.filter((it) => it.programId)
       if (!validItems.length) {
         toast.warning('Program belum ditentukan', 'Pilih program tujuan untuk baris yang belum memiliki program.')
+        setImportSending(false)
+        return
+      }
+      const badRow = validItems.find((it) => (Number(it.targetLulusan) || 0) > (Number(it.targetPeserta) || 0))
+      if (badRow) {
+        const msg = `Baris ${badRow.rowNum || ''} "${badRow.name}": Lulusan (${badRow.targetLulusan}) tidak boleh lebih besar dari Peserta (${badRow.targetPeserta}). Perbaiki file Excel lalu ulangi.`
+        setImportError(msg)
+        toast.error('Validasi import gagal', msg)
         setImportSending(false)
         return
       }
@@ -719,7 +732,8 @@ export default function TargetPkUptPage() {
 
           for (const it of validItems) {
             const rawName = String(it.name || '').trim()
-            const tVal = Number(it.target) || 0
+            const tP = Number(it.targetPeserta) || 0
+            const tL = Number(it.targetLulusan) || 0
             if (rawName) {
               // Cari diklat yang sudah ada dengan program yang sama
               let existing = diklats.find((d) => d.name.trim().toLowerCase() === rawName.toLowerCase() && (d.programIds || []).map(String).includes(String(it.programId)))
@@ -746,19 +760,15 @@ export default function TargetPkUptPage() {
                 diklatTargets.push({
                   diklatId: dId,
                   programId: it.programId,
-                  target: tVal,
-                  targetPk: tVal,
-                  targetPeserta: tVal,
-                  targetLulusan: tVal,
+                  targetPeserta: tP,
+                  targetLulusan: tL,
                 })
               }
             } else {
               directItems.push({
                 programId: it.programId,
-                target: tVal,
-                targetPk: tVal,
-                targetPeserta: tVal,
-                targetLulusan: tVal,
+                targetPeserta: tP,
+                targetLulusan: tL,
               })
             }
           }
@@ -786,23 +796,36 @@ export default function TargetPkUptPage() {
         <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Rincian diklat ({rincian.length}) di bawah {contextName}</p>
         {rincian.map((d) => {
           const fKey = `${programId}_${d.id}`
-          const v = diklatVal(programId, d.id)
+          const { p, l } = diklatValPL(programId, d.id)
+          const numCls = 'form-input !py-1.5 tabular-nums text-center font-black !rounded-xl text-slate-900 border-slate-300 focus:border-navy-600 focus:ring-1 focus:ring-navy-600'
           return (
             <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
               <p className="text-[13px] font-semibold text-slate-700 flex items-center gap-1.5 min-w-0">
                 <span className="text-slate-400 font-bold">•</span>
                 <span className="truncate">{d.name}</span>
               </p>
-              <div className="w-full sm:w-44 shrink-0 flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Target PK:</span>
+              <div className="w-full sm:w-auto shrink-0 flex items-center gap-2">
+                <span className="text-xs font-bold text-sky-700 whitespace-nowrap">Peserta:</span>
                 <input
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
-                  className="form-input !py-1.5 tabular-nums text-center font-black !rounded-xl text-slate-900 border-slate-300 focus:border-navy-600 focus:ring-1 focus:ring-navy-600"
+                  className={`${numCls} !w-20`}
                   placeholder="0"
-                  value={v}
-                  onChange={(e) => setDiklatForm((f) => ({ ...f, [fKey]: e.target.value.replace(/[^0-9]/g, '') }))}
+                  value={p}
+                  onChange={(e) => setDiklatFormPL(programId, d.id, 'p', e.target.value)}
+                  aria-label={`Target peserta ${d.name}`}
+                />
+                <span className="text-xs font-bold text-emerald-700 whitespace-nowrap">Lulusan:</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  className={`${numCls} !w-20`}
+                  placeholder="0"
+                  value={l}
+                  onChange={(e) => setDiklatFormPL(programId, d.id, 'l', e.target.value)}
+                  aria-label={`Target lulusan ${d.name}`}
                 />
               </div>
             </div>
@@ -812,21 +835,19 @@ export default function TargetPkUptPage() {
     )
   }
 
-  const totalTargetPk = useMemo(() => {
-    let sum = 0
+  const previewTotals = useMemo(() => {
+    let p = 0, l = 0
     for (const g of parentGroups) {
-      if (g.parentId && (!g.children || g.children.length === 0)) {
-        sum += Number(progVal(g.parentId)) || 0
-      } else {
-        for (const child of g.children) {
-          sum += Number(progVal(child.id)) || 0
-        }
+      const kids = g.parentId && (!g.children || g.children.length === 0) ? [g.parentId] : (g.children || []).map((c) => c.id)
+      for (const pid of kids) {
+        p += Number(progValPL(pid, 'p')) || 0
+        l += Number(progValPL(pid, 'l')) || 0
       }
     }
-    if (sum > 0) return sum
-    return myTarget?.targetPeserta || myTarget?.targetLulusan || 0
+    if (p + l > 0) return { p, l }
+    return { p: myTarget?.targetPeserta || 0, l: myTarget?.targetLulusan || 0 }
   }, [parentGroups, diklatForm, progForm, diklats, myTarget, diklatByProgram, childIdsByParent, parentsWithChildren])
-  const hasAny = (myTarget?.items || []).length > 0 || totalTargetPk > 0
+  const hasAny = (myTarget?.items || []).length > 0 || previewTotals.p > 0 || previewTotals.l > 0
   const totalProgramsCount = (myTarget?.items || []).filter((i) => (Number(i.targetPeserta) || Number(i.targetLulusan) || 0) > 0).length
 
   const statusBadge = !submission || submission.status === 'draft'
@@ -923,8 +944,8 @@ export default function TargetPkUptPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">Total Target PK {year}</p>
-              <p className="mt-2 text-[32px] font-black text-gold-300 tabular-nums">{fmtNum(totalTargetPk)}</p>
-              <p className="text-xs text-slate-300 mt-1">Satu kali input tahunan</p>
+              <p className="mt-2 text-[26px] font-black tabular-nums leading-none"><span className="text-sky-300">{fmtNum(previewTotals.p)}</span> <span className="text-slate-400 text-lg">/</span> <span className="text-gold-300">{fmtNum(previewTotals.l)}</span></p>
+              <p className="text-xs text-slate-300 mt-1">Peserta / Lulusan · satu kali input</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
               <IconTarget className="h-6 w-6 text-gold-300" />
@@ -1024,11 +1045,12 @@ export default function TargetPkUptPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: 600 }}>
+            <table className="w-full text-sm" style={{ minWidth: 640 }}>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/60">
                   <th className="text-left px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Program / Rincian Diklat</th>
-                  <th className="text-right px-6 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500 w-48">Target PK</th>
+                  <th className="text-right px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700 w-32">Target Peserta</th>
+                  <th className="text-right px-6 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700 w-32">Target Lulusan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1036,7 +1058,8 @@ export default function TargetPkUptPage() {
                   const rows = []
                   // ── Baris INDUK (auto-sum dari turunan) ──
                   if (g.parent) {
-                    const pkInduk = Number(progVal(g.parentId)) || 0
+                    const pkIndukP = Number(progValPL(g.parentId, 'p')) || 0
+                    const pkIndukL = Number(progValPL(g.parentId, 'l')) || 0
                     rows.push(
                       <tr key={`induk-${g.parentId}`} className="bg-navy-50/60 align-top">
                         <td className="px-5 py-4">
@@ -1055,20 +1078,26 @@ export default function TargetPkUptPage() {
                             <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
                               {(diklatByProgram.get(g.parentId) || []).map((d) => {
                                 const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[g.parentId] : null
-                                const pk = (tbp && (tbp.targetPk !== undefined || tbp.targetPeserta !== undefined)) ? (tbp.targetPk ?? tbp.targetPeserta) : (d.targetPeserta || 0)
+                                const dP = Number(tbp?.targetPeserta ?? tbp?.targetPk ?? d.targetPeserta) || 0
+                                const dL = Number(tbp?.targetLulusan ?? tbp?.targetPk ?? d.targetLulusan) || 0
                                 return (
                                   <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
                                     <span className="font-semibold text-slate-600">• {d.name}</span>
-                                    <span className="tabular-nums font-bold text-slate-700">{fmtNum(pk)}</span>
+                                    <span className="tabular-nums font-bold text-slate-700 whitespace-nowrap">{fmtNum(dP)} / {fmtNum(dL)}</span>
                                   </div>
                                 )
                               })}
                             </div>
                           )}
                         </td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="inline-flex items-center rounded-full bg-sky-600 text-white px-3 py-1 text-xs font-black tabular-nums">
+                            {fmtNum(pkIndukP)}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center rounded-full bg-navy-900 text-gold-300 px-3.5 py-1 text-xs font-black tabular-nums">
-                            {fmtNum(pkInduk)}
+                          <span className="inline-flex items-center rounded-full bg-emerald-600 text-white px-3 py-1 text-xs font-black tabular-nums">
+                            {fmtNum(pkIndukL)}
                           </span>
                         </td>
                       </tr>
@@ -1078,12 +1107,16 @@ export default function TargetPkUptPage() {
                   for (const child of g.children) {
                     const it = itemsByPid.get(child.id)
                     const rincian = (diklatByProgram.get(child.id) || []).filter((d) => d)
-                    const sumDiklat = rincian.reduce((s, d) => {
+                    const sumDiklatP = rincian.reduce((s, d) => {
                       const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
-                      const dPk = (tbp && (tbp.targetPk !== undefined || tbp.targetPeserta !== undefined)) ? (tbp.targetPk ?? tbp.targetPeserta) : (d.targetPeserta || 0)
-                      return s + (Number(dPk) || 0)
+                      return s + (Number(tbp?.targetPeserta ?? tbp?.targetPk ?? d.targetPeserta) || 0)
                     }, 0)
-                    const pkVal = rincian.length > 0 ? sumDiklat : ((it?.targetPeserta ?? Number(progVal(child.id))) || 0)
+                    const sumDiklatL = rincian.reduce((s, d) => {
+                      const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
+                      return s + (Number(tbp?.targetLulusan ?? tbp?.targetPk ?? d.targetLulusan) || 0)
+                    }, 0)
+                    const pkP = rincian.length > 0 ? sumDiklatP : (Number(it?.targetPeserta ?? progValPL(child.id, 'p')) || 0)
+                    const pkL = rincian.length > 0 ? sumDiklatL : (Number(it?.targetLulusan ?? progValPL(child.id, 'l')) || 0)
                     rows.push(
                       <tr key={child.id} className="hover:bg-slate-50/60 align-top">
                         <td className="px-5 py-4">
@@ -1096,11 +1129,12 @@ export default function TargetPkUptPage() {
                                 <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
                                   {rincian.map((d) => {
                                     const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
-                                    const dPk = (tbp && (tbp.targetPk !== undefined || tbp.targetPeserta !== undefined)) ? (tbp.targetPk ?? tbp.targetPeserta) : (d.targetPeserta || 0)
+                                    const dP = Number(tbp?.targetPeserta ?? tbp?.targetPk ?? d.targetPeserta) || 0
+                                    const dL = Number(tbp?.targetLulusan ?? tbp?.targetPk ?? d.targetLulusan) || 0
                                     return (
                                       <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
                                         <span className="font-semibold text-slate-600">• {d.name}</span>
-                                        <span className="tabular-nums font-bold text-slate-700">{fmtNum(dPk)}</span>
+                                        <span className="tabular-nums font-bold text-slate-700 whitespace-nowrap">{fmtNum(dP)} / {fmtNum(dL)}</span>
                                       </div>
                                     )
                                   })}
@@ -1111,9 +1145,14 @@ export default function TargetPkUptPage() {
                             </div>
                           </div>
                         </td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="inline-flex items-center rounded-xl bg-sky-50 text-sky-900 border border-sky-200 px-3 py-1 text-xs font-black tabular-nums">
+                            {fmtNum(pkP)}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center rounded-xl bg-slate-100 text-slate-900 border border-slate-200 px-3 py-1 text-xs font-black tabular-nums">
-                            {fmtNum(pkVal)}
+                          <span className="inline-flex items-center rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200 px-3 py-1 text-xs font-black tabular-nums">
+                            {fmtNum(pkL)}
                           </span>
                         </td>
                       </tr>
@@ -1143,7 +1182,7 @@ export default function TargetPkUptPage() {
         <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-5">
           {formError && <Alert type="error">{formError}</Alert>}
           <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 text-xs text-slate-600 leading-relaxed space-y-1.5">
-            <p><strong className="text-slate-900">Petunjuk Pengisian:</strong> Cukup isi 1 angka <strong>Target PK</strong> per diklat bila ada rincian, atau langsung per <strong>program turunan</strong> bila tanpa rincian diklat.</p>
+            <p><strong className="text-slate-900">Petunjuk Pengisian:</strong> Isi <strong>Target Peserta</strong> &amp; <strong>Target Lulusan</strong> per diklat bila ada rincian, atau langsung per <strong>program turunan</strong> bila tanpa rincian diklat (Lulusan ≤ Peserta).</p>
             <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900">
               <strong>Penting:</strong> Angka Target PK harus <strong>sama dan konsisten dengan angka capaian pada LAKIP</strong> UPT Anda.
             </p>
@@ -1159,7 +1198,8 @@ export default function TargetPkUptPage() {
             <EmptyState icon={<IconLayers className="h-6 w-6" />} title="Belum ada program" desc="Hubungi admin untuk menambah program." />
           ) : (
             parentGroups.map((g) => {
-              const pkInduk = g.parentId ? Number(progVal(g.parentId)) || 0 : 0
+              const pkIndukP = g.parentId ? Number(progValPL(g.parentId, 'p')) || 0 : 0
+              const pkIndukL = g.parentId ? Number(progValPL(g.parentId, 'l')) || 0 : 0
               return (
                 <div key={g.parentId || g.parentName} className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                   {/* Header INDUK */}
@@ -1170,8 +1210,8 @@ export default function TargetPkUptPage() {
                       <span className="inline-flex items-center rounded-full bg-white text-navy-900 text-[10px] font-black px-2 py-0.5">induk auto</span>
                     )}
                     {g.parentId && (
-                      <span className="ml-auto text-[11px] font-black tabular-nums bg-white/10 border border-white/15 rounded-full px-2.5 py-1 text-gold-300">
-                        Total Target PK: {fmtNum(pkInduk)}
+                      <span className="ml-auto text-[11px] font-black tabular-nums bg-white/10 border border-white/15 rounded-full px-2.5 py-1 text-gold-300 whitespace-nowrap">
+                        P: {fmtNum(pkIndukP)} · L: {fmtNum(pkIndukL)}
                       </span>
                     )}
                   </div>
@@ -1184,7 +1224,11 @@ export default function TargetPkUptPage() {
                     {g.children.map((p) => {
                       const rincian = diklatByProgram.get(p.id) || []
                       const hasRincian = rincian.length > 0
-                      const totalPk = Number(progVal(p.id)) || 0
+                      const totalP = Number(progValPL(p.id, 'p')) || 0
+                      const totalL = Number(progValPL(p.id, 'l')) || 0
+                      const saved = itemsByPid.get(p.id)
+                      const formP = progForm[p.id]?.p
+                      const formL = progForm[p.id]?.l
                       return (
                         <div key={p.id} className="px-4 py-4 bg-white">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1192,25 +1236,37 @@ export default function TargetPkUptPage() {
                               <span className="mr-2 inline-block h-4 w-1 rounded-full bg-slate-300 align-middle" />
                               {p.name}
                             </p>
-                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full tabular-nums">
-                              Total: {fmtNum(totalPk)} {hasRincian && '(otomatis = jumlah diklat)'}
+                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full tabular-nums whitespace-nowrap">
+                              P: {fmtNum(totalP)} · L: {fmtNum(totalL)} {hasRincian && '(otomatis = jumlah diklat)'}
                             </span>
                           </div>
                           {hasRincian ? (
                             <DiklatInputList rincian={rincian} contextName={p.name} programId={p.id} />
                           ) : (
                             <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <p className="text-xs text-slate-500">Tanpa rincian — isi langsung Target PK program ini.</p>
-                              <div className="w-full sm:w-44 shrink-0 flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Target PK:</span>
+                              <p className="text-xs text-slate-500">Tanpa rincian — isi langsung Target Peserta &amp; Lulusan program ini.</p>
+                              <div className="w-full sm:w-auto shrink-0 flex items-center gap-2">
+                                <span className="text-xs font-bold text-sky-700 whitespace-nowrap">Peserta:</span>
                                 <input
                                   type="text"
                                   inputMode="numeric"
                                   autoComplete="off"
-                                  className="form-input !py-1.5 tabular-nums text-center font-black !rounded-xl text-slate-900 border-slate-300"
+                                  className="form-input !py-1.5 tabular-nums text-center font-black !rounded-xl text-slate-900 border-slate-300 !w-20"
                                   placeholder="0"
-                                  value={progForm[p.id] ?? String(itemsByPid.get(p.id)?.targetPeserta ?? 0)}
-                                  onChange={(e) => setProgForm((f) => ({ ...f, [p.id]: e.target.value.replace(/[^0-9]/g, '') }))}
+                                  value={formP ?? String(saved?.targetPeserta ?? 0)}
+                                  onChange={(e) => setProgFormPL(p.id, 'p', e.target.value)}
+                                  aria-label={`Target peserta ${p.name}`}
+                                />
+                                <span className="text-xs font-bold text-emerald-700 whitespace-nowrap">Lulusan:</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  autoComplete="off"
+                                  className="form-input !py-1.5 tabular-nums text-center font-black !rounded-xl text-slate-900 border-slate-300 !w-20"
+                                  placeholder="0"
+                                  value={formL ?? String(saved?.targetLulusan ?? 0)}
+                                  onChange={(e) => setProgFormPL(p.id, 'l', e.target.value)}
+                                  aria-label={`Target lulusan ${p.name}`}
                                 />
                               </div>
                             </div>
@@ -1229,7 +1285,7 @@ export default function TargetPkUptPage() {
               <span className="h-10 w-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">🎯</span>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-300">Total Target PK {year}</p>
-                <p className="text-base font-black text-gold-300 tabular-nums">{fmtNum(previewTotal)}</p>
+                <p className="text-base font-black tabular-nums"><span className="text-sky-300">P: {fmtNum(previewTotals.p)}</span> <span className="text-slate-400">·</span> <span className="text-gold-300">L: {fmtNum(previewTotals.l)}</span></p>
               </div>
             </div>
             <div className="flex justify-end gap-2 sm:ml-auto flex-wrap">
@@ -1280,7 +1336,7 @@ export default function TargetPkUptPage() {
                 <span className="text-sky-600 font-black text-sm">💡</span>
                 <div className="space-y-1">
                   <p className="font-bold text-slate-800">Gunakan Template Resmi agar otomatis terbaca:</p>
-                  <p>Template memiliki kolom <strong>PROGRAM TUJUAN</strong>, <strong>NAMA DIKLAT</strong>, dan <strong>TARGET PK</strong>. Anda bisa langsung menetapkan target untuk semua diklat dalam 1 file.</p>
+                  <p>Template memiliki kolom <strong>PROGRAM TUJUAN</strong>, <strong>NAMA DIKLAT</strong>, <strong>TARGET PESERTA</strong>, dan <strong>TARGET LULUSAN</strong>. Anda bisa langsung menetapkan target untuk semua diklat dalam 1 file.</p>
                   <button type="button" onClick={downloadTemplate} className="font-extrabold text-sky-700 underline hover:text-sky-900">
                     Unduh Template Target PK (.xlsx)
                   </button>
@@ -1293,9 +1349,9 @@ export default function TargetPkUptPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                    Pratinjau Data ({importParsedItems.length} baris terbaca — Total Target PK: {fmtNum(importParsedItems.reduce((s, it) => s + (Number(it.target) || 0), 0))})
-                  </h4>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                      Pratinjau Data ({importParsedItems.length} baris terbaca — Peserta: {fmtNum(importParsedItems.reduce((s, it) => s + (Number(it.targetPeserta) || 0), 0))} · Lulusan: {fmtNum(importParsedItems.reduce((s, it) => s + (Number(it.targetLulusan) || 0), 0))})
+                    </h4>
                   <p className="text-xs text-slate-500">Periksa pencocokan program tujuan dan angka target sebelum disimpan.</p>
                 </div>
                 <button type="button" onClick={() => setImportStep(1)} className="text-xs font-bold text-slate-500 hover:text-slate-800 underline">
@@ -1308,9 +1364,10 @@ export default function TargetPkUptPage() {
                 {Array.from(
                   importParsedItems.reduce((map, it) => {
                     const k = it.programName || 'Program Lainnya'
-                    const cur = map.get(k) || { name: k, count: 0, total: 0 }
+                    const cur = map.get(k) || { name: k, count: 0, totalP: 0, totalL: 0 }
                     cur.count += 1
-                    cur.total += Number(it.target) || 0
+                    cur.totalP += Number(it.targetPeserta) || 0
+                    cur.totalL += Number(it.targetLulusan) || 0
                     map.set(k, cur)
                     return map
                   }, new Map()).values()
@@ -1320,8 +1377,8 @@ export default function TargetPkUptPage() {
                       <p className="text-[11px] font-bold text-slate-700 truncate">{progSum.name}</p>
                       <p className="text-[10px] text-slate-500">{progSum.count} diklat</p>
                     </div>
-                    <span className="text-xs font-black text-navy-950 bg-white border border-slate-200 px-2 py-0.5 rounded-lg tabular-nums">
-                      {fmtNum(progSum.total)}
+                    <span className="text-xs font-black text-navy-950 bg-white border border-slate-200 px-2 py-0.5 rounded-lg tabular-nums whitespace-nowrap">
+                      P: {fmtNum(progSum.totalP)} · L: {fmtNum(progSum.totalL)}
                     </span>
                   </div>
                 ))}
@@ -1338,8 +1395,8 @@ export default function TargetPkUptPage() {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="text-xs font-black text-navy-900 bg-navy-50 border border-navy-200 rounded-lg px-2.5 py-1 tabular-nums">
-                        PK: {fmtNum(it.target)}
+                      <span className="text-xs font-black text-navy-900 bg-navy-50 border border-navy-200 rounded-lg px-2.5 py-1 tabular-nums whitespace-nowrap">
+                        P: {fmtNum(it.targetPeserta)} · L: {fmtNum(it.targetLulusan)}
                       </span>
                     </div>
                   </div>

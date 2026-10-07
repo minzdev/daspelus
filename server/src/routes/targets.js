@@ -699,7 +699,18 @@ router.post("/import", requireUpt, async (req, res) => {
 
     for (const item of rawItems) {
       const rawName = String(item.name || "").trim();
-      const targetVal = Math.max(0, parseInt(item.target ?? item.targetPk ?? item.targetPeserta, 10) || 0);
+      // Format baru: Target Peserta & Target Lulusan terpisah. Format lama
+      // (1 kolom Target PK) tetap didukung: 1 angka dipakai untuk keduanya.
+      const hasSplit = item.targetPeserta !== undefined || item.targetLulusan !== undefined;
+      const legacyVal = Math.max(0, parseInt(item.target ?? item.targetPk ?? item.targetPeserta, 10) || 0);
+      const targetValP = hasSplit ? (Number(item.targetPeserta) || 0) : legacyVal;
+      const targetValL = hasSplit ? (Number(item.targetLulusan) || 0) : legacyVal;
+      if (!Number.isFinite(targetValP) || !Number.isFinite(targetValL) || targetValP < 0 || targetValL < 0) {
+        return res.status(400).json({ error: `Baris "${rawName || item.programName || '?'}": target harus angka ≥ 0.` });
+      }
+      if (targetValL > targetValP) {
+        return res.status(400).json({ error: `Baris "${rawName || item.programName || '?'}": Lulusan (${targetValL}) tidak boleh lebih besar dari Peserta (${targetValP}).` });
+      }
 
       // Cari program
       let pid = item.programId;
@@ -725,10 +736,10 @@ router.post("/import", requireUpt, async (req, res) => {
         }
 
         if (!doc) {
-          const tbp = { [String(pid)]: { targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal } };
+          const tbp = { [String(pid)]: { targetPeserta: targetValP, targetLulusan: targetValL } };
           doc = await Diklat.create({
             uptId, year: y, name: rawName, programIds: [String(pid)],
-            targetPeserta: targetVal, targetLulusan: targetVal,
+            targetPeserta: targetValP, targetLulusan: targetValL,
             targetByProgram: tbp,
             isActive: true, createdBy: req.uid,
           });
@@ -737,17 +748,19 @@ router.post("/import", requireUpt, async (req, res) => {
           const curPids = Array.isArray(doc.programIds) ? doc.programIds.map(String) : [];
           if (!curPids.includes(String(pid))) curPids.push(String(pid));
           const curTbp = (doc.targetByProgram && typeof doc.targetByProgram === 'object') ? { ...doc.targetByProgram } : {};
-          curTbp[String(pid)] = { targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal };
-          let tot = 0;
+          curTbp[String(pid)] = { targetPeserta: targetValP, targetLulusan: targetValL };
+          let totP = 0, totL = 0;
           for (const [k, v] of Object.entries(curTbp)) {
-            if (curPids.includes(k)) tot += Number(v?.targetPeserta ?? v?.targetPk) || 0;
+            if (!curPids.includes(k)) continue;
+            totP += Number(v?.targetPeserta ?? v?.targetPk) || 0;
+            totL += Number(v?.targetLulusan ?? v?.targetPk) || 0;
           }
-          await doc.update({ programIds: curPids, targetByProgram: curTbp, targetPeserta: tot, targetLulusan: tot });
+          await doc.update({ programIds: curPids, targetByProgram: curTbp, targetPeserta: totP, targetLulusan: totL });
           updatedCount++;
         }
-        diklatTargets.push({ diklatId: doc.id, programId: pid, targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal, target: targetVal });
+        diklatTargets.push({ diklatId: doc.id, programId: pid, targetPeserta: targetValP, targetLulusan: targetValL });
       } else {
-        directItems.push({ programId: pid, targetPeserta: targetVal, targetLulusan: targetVal, targetPk: targetVal, target: targetVal });
+        directItems.push({ programId: pid, targetPeserta: targetValP, targetLulusan: targetValL });
       }
     }
 
@@ -761,11 +774,18 @@ router.post("/import", requireUpt, async (req, res) => {
         const key = String(p);
         const cur = progSum.get(key) || { tp: 0, tl: 0 };
         const pv = tbp[key];
-        const val = (pv && (pv.targetPeserta !== undefined || pv.targetPk !== undefined))
-          ? Number(pv.targetPk ?? pv.targetPeserta)
-          : (ids.length === 1 ? (Number(d.targetPeserta) || 0) : 0);
-        cur.tp += val;
-        cur.tl += val;
+        let vp, vl;
+        if (pv && (pv.targetPeserta !== undefined || pv.targetLulusan !== undefined || pv.targetPk !== undefined)) {
+          vp = Number(pv.targetPeserta ?? pv.targetPk ?? 0);
+          vl = Number(pv.targetLulusan ?? pv.targetPk ?? 0);
+        } else if (ids.length === 1) {
+          vp = Number(d.targetPeserta) || 0;
+          vl = Number(d.targetLulusan) || 0;
+        } else {
+          vp = 0; vl = 0;
+        }
+        cur.tp += vp;
+        cur.tl += vl;
         progSum.set(key, cur);
       }
     }
