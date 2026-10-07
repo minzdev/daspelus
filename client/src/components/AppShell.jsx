@@ -24,19 +24,14 @@ const ADMIN_NAV = [
     ],
   },
   {
-    section: 'Perjanjian Kinerja (PK)',
+    section: 'Data Peserta dan Lulusan',
     items: [
-      { to: '/admin/programs', label: 'Master Program', icon: IconLayers },
-      { to: '/admin/target-pk', label: 'Target PK (Pantau)', icon: IconTarget },
+      { to: '/admin/programs', label: 'Master Diklat', icon: IconLayers },
+      { to: '/admin/target-pk', label: 'Lihat Target PK', icon: IconTarget },
       { to: '/admin/monitoring', label: 'Monitoring Realisasi', icon: IconChart },
-    ],
-  },
-  {
-    section: 'Laporan Realisasi',
-    items: [
       { to: '/admin/laporan', label: 'Laporan Realisasi', icon: IconFileText, end: true },
       { to: '/admin/riwayat-pelaporan', label: 'Riwayat Pelaporan', icon: IconHistory },
-      { to: '/admin/program-detail', label: 'Detail Data Program', icon: IconLayers },
+      { to: '/admin/program-detail', label: 'Detail Data Diklat', icon: IconLayers },
     ],
   },
   {
