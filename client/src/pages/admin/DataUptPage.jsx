@@ -15,8 +15,8 @@ const MATRA_OPTIONS = [
 ]
 
 const UPT_TYPE_OPTIONS = [
-  { value: 'taruna', label: 'Taruna (3 Matra)', short: 'Taruna', icon: '⚓', desc: 'Memiliki taruna dari matra darat/laut/udara' },
-  { value: 'aparatur', label: 'Aparatur', short: 'Aparatur', icon: '🏢', desc: 'Unit pelaksana untuk diklat aparatur' },
+  { value: 'taruna', label: 'Taruna — Sekolah Tinggi, Politeknik, Akademi, Balai', short: 'Taruna', icon: '⚓', desc: 'Memiliki taruna dari matra darat/laut/udara' },
+  { value: 'aparatur', label: 'Aparatur — Pusbang dan BP3KSDMP', short: 'Aparatur', icon: '🏢', desc: 'Unit pelaksana untuk diklat aparatur' },
 ]
 
 const EMPTY_FORM = { code: '', name: '', matra: '', uptType: 'taruna' }
@@ -145,11 +145,8 @@ export default function DataUptPage() {
             <span className="hidden sm:inline-flex h-8 w-8 items-center justify-center rounded-xl bg-navy-900 text-white">
               <IconBuilding className="h-4 w-4" />
             </span>
-            Data UPT
+            Master Data UPT
           </h1>
-          <p className="page-desc mt-1.5 max-w-2xl">
-            Kelola Unit Pelaksana Teknis yang melaporkan data peserta dan lulusan. Filter berdasarkan matra dan tipe untuk menemukan UPT lebih cepat.
-          </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button className="btn-secondary !rounded-xl !py-2.5" onClick={load} title="Muat ulang" aria-label="Muat ulang">
@@ -383,7 +380,7 @@ export default function DataUptPage() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {formError && <Alert type="error">{formError}</Alert>}
-          <FormField label="Kode UPT" required hint="Huruf kapital tanpa spasi, contoh: STIP">
+          <FormField label="Kode UPT" required>
             <input
               className="form-input uppercase !rounded-xl"
               placeholder="STIP"
@@ -399,7 +396,7 @@ export default function DataUptPage() {
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
           </FormField>
-          <FormField label="Matra" hint="Pilih Darat / Laut / Udara untuk Taruna, atau Aparatur untuk diklat aparatur">
+          <FormField label="Matra">
             <select
               className="form-input !rounded-xl"
               value={form.matra}
@@ -419,7 +416,7 @@ export default function DataUptPage() {
               ))}
             </select>
           </FormField>
-          <FormField label="Tipe UPT" hint="Tentukan jenis UPT untuk menentukan program diklat yang tersedia" required>
+          <FormField label="Tipe UPT" required>
             <select
               className="form-input !rounded-xl"
               value={form.uptType}

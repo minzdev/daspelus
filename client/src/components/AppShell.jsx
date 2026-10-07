@@ -20,7 +20,7 @@ const ADMIN_NAV = [
     items: [
       { to: '/admin', label: 'Dashboard', icon: IconDashboard, end: true },
       { to: '/admin/persetujuan', label: 'Pusat Persetujuan', icon: IconCheckSquare },
-      { to: '/admin/upt', label: 'Data UPT', icon: IconBuilding },
+      { to: '/admin/upt', label: 'Master Data UPT', icon: IconBuilding },
     ],
   },
   {
