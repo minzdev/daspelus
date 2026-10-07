@@ -131,9 +131,6 @@ export default function DashboardProgramDetail({ programs = [], year, loading = 
                 3 Matra Taruna &amp; Aparatur · {year}
               </span>
             </div>
-            <p className="text-xs text-navy-500 mt-0.5">
-              Rincian komprehensif jumlah peserta dan lulusan per program diklat seluruh UPT Kementerian Perhubungan.
-            </p>
           </div>
         </div>
 

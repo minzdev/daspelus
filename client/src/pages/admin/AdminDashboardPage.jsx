@@ -153,9 +153,6 @@ export default function AdminDashboardPage() {
                   Tahun {year}
                 </span>
               </div>
-              <p className="text-xs text-navy-200 mt-0.5 max-w-2xl">
-                Realisasi peserta &amp; lulusan serta serapan lulusan seluruh UPT Kementerian Perhubungan.
-              </p>
             </div>
           </div>
           
