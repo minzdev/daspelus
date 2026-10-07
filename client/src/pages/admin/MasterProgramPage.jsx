@@ -524,14 +524,6 @@ export default function MasterProgramPage() {
         </div>
       )}
 
-      {/* Info aturan */}
-      <div className="mt-5">
-        <Alert type="info">
-          Program turunan yang aktif akan menjadi pilihan pada <strong>Input Realisasi</strong> (user UPT)
-          dan <strong>Target PK</strong> (admin). Program hanya dapat dihapus jika belum ada data realisasi atau target PK yang terkait.
-        </Alert>
-      </div>
-
       {/* Modal tambah/edit */}
       <Modal
         open={modalOpen}
