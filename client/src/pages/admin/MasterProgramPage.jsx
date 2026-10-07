@@ -21,9 +21,9 @@ import { useToast } from '../../components/Toast'
  */
 
 const TARGET_GROUP_OPTIONS = [
-  { value: 'semua', label: 'Semua UPT', desc: 'Tampil di semua jenis UPT' },
-  { value: 'taruna', label: 'Taruna (3 Matra)', desc: 'Hanya tampil di UPT yang memiliki taruna darat/laut/udara' },
-  { value: 'aparatur', label: 'Aparatur', desc: 'Hanya tampil di UPT aparatur (non-taruna)' },
+  { value: 'semua', label: 'Semua UPT' },
+  { value: 'taruna', label: 'Taruna (3 Matra)' },
+  { value: 'aparatur', label: 'Aparatur' },
 ]
 
 function TargetGroupBadge({ value }) {
@@ -155,7 +155,7 @@ export default function MasterProgramPage() {
     e.preventDefault()
     setFormError('')
     if (!form.name.trim()) {
-      setFormError('Nama program wajib diisi.')
+      setFormError('Nama kategori diklat wajib diisi.')
       return
     }
     setSaving(true)
@@ -212,26 +212,23 @@ export default function MasterProgramPage() {
   }
 
   const modalTitle = editing
-    ? `Edit Program`
+    ? `Edit Kategori Diklat`
     : addMode === 'child'
-      ? 'Tambah Program Turunan'
-      : 'Tambah Program Induk'
+      ? 'Tambah Turunan'
+      : 'Tambah Kategori Diklat'
 
   return (
     <div className="animate-fadeUp">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Master Program</h1>
-          <p className="page-desc">
-            Kelola program pendidikan &amp; pelatihan (induk → turunan) sebagai dasar input realisasi dan target PK.
-          </p>
+          <h1 className="page-title">Master Kategori Diklat</h1>
         </div>
         <div className="flex items-center gap-2">
           <button className="btn-secondary" onClick={load} title="Muat ulang">
             <IconRefresh className="h-4 w-4" />
           </button>
           <button className="btn-primary" onClick={openAddParent}>
-            <IconPlus className="h-4 w-4" /> Program Induk
+            <IconPlus className="h-4 w-4" /> Kategori Diklat
           </button>
         </div>
       </div>
@@ -263,9 +260,6 @@ export default function MasterProgramPage() {
                 </button>
               )
             })}
-            <span className="ml-auto hidden sm:inline text-[11px] text-navy-400">
-              Pisah agar tidak tercampur — Taruna tampil di UPT Darat/Laut/Udara, Aparatur hanya di UPT Aparatur
-            </span>
           </div>
           {/* Pencarian + info */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-t border-surface-border pt-3">
@@ -308,7 +302,7 @@ export default function MasterProgramPage() {
           }
           action={!search && (
             <button className="btn-primary" onClick={openAddParent}>
-              <IconPlus className="h-4 w-4" /> Tambah Program Induk
+              <IconPlus className="h-4 w-4" /> Tambah Kategori Diklat
             </button>
           )}
         />
@@ -359,7 +353,7 @@ export default function MasterProgramPage() {
                       {parent.children && parent.children.length > 0 ? (
                         <div className="table-wrap">
                           <table className="data-table">
-                            <thead><tr><th className="w-12">#</th><th>Program Turunan</th><th className="w-28">Sasaran</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead>
+                            <thead><tr><th className="w-12">No</th><th>Program Turunan</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead>
                             <tbody>{parent.children.map((child, idx) => (
                               <tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>
                             ))}</tbody>
@@ -405,7 +399,7 @@ export default function MasterProgramPage() {
                         </div>
                       </div>
                       {parent.children && parent.children.length > 0 ? (
-                        <div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">#</th><th>Program Turunan</th><th className="w-28">Sasaran</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (
+                        <div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">No</th><th>Program Turunan</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (
                         <tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>
                       ))}</tbody></table></div>
                       ) : (
@@ -424,7 +418,7 @@ export default function MasterProgramPage() {
                       <div className="flex flex-col md:flex-row md:items-center gap-3 px-5 py-4 border-b border-surface-border bg-navy-50/40">
                         <div className="flex items-center gap-3 min-w-0"><div className="h-9 w-9 shrink-0 rounded-lg bg-navy-800 text-gold-300 flex items-center justify-center"><IconLayers className="h-4.5 w-4.5" /></div><div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><p className="font-bold text-navy-900 text-sm truncate">{parent.name}</p><TargetGroupBadge value={parent.targetGroup || 'semua'} /></div><p className="text-[11px] text-navy-400">{parent.children?.length || 0} program turunan · urutan {parent.order || 0}</p></div></div><div className="flex items-center gap-2 md:ml-auto shrink-0"><button className="btn-secondary btn-sm" onClick={() => openEdit(parent)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button><button className="btn-primary btn-sm" onClick={() => openAddChild(parent)}><IconPlus className="h-3.5 w-3.5" /> Turunan</button></div>
                       </div>
-                      {parent.children && parent.children.length > 0 ? (<div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">#</th><th>Program Turunan</th><th className="w-28">Sasaran</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (<tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>))}</tbody></table></div>) : (<div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada program turunan. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah turunan pertama</button></p></div>)}
+                      {parent.children && parent.children.length > 0 ? (<div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">No</th><th>Program Turunan</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (<tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>))}</tbody></table></div>) : (<div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada program turunan. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah turunan pertama</button></p></div>)}
                     </div>
                   ))}</div>
                 </div>
@@ -476,9 +470,9 @@ export default function MasterProgramPage() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th className="w-12">#</th>
+                        <th className="w-12">No</th>
                         <th>Program Turunan</th>
-                        <th className="w-28">Sasaran</th>
+                        <th className="w-28">Unit Kerja</th>
                         <th className="w-24">Urutan</th>
                         <th className="w-48 text-right">Aksi</th>
                       </tr>
@@ -548,7 +542,7 @@ export default function MasterProgramPage() {
             ? `Perbarui kategori diklat "${editing.name}".`
             : addMode === 'child'
               ? `Turunan baru di bawah "${parents.find((p) => p.id === childParentId)?.name || ''}".`
-              : 'Kategori utama, mis. Pendidikan Pembentukan.'
+              : undefined
         }
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -562,7 +556,7 @@ export default function MasterProgramPage() {
               autoFocus
             />
           </FormField>
-          <FormField label="Kelompok Sasaran" hint="UPT mana yang akan melihat program ini di halaman Input Realisasi">
+          <FormField label="Unit Kerja">
             <select
               className="form-input"
               value={form.targetGroup}
@@ -570,12 +564,12 @@ export default function MasterProgramPage() {
             >
               {TARGET_GROUP_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
-                  {opt.label} — {opt.desc}
+                  {opt.label}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Urutan Tampil" hint="Angka kecil tampil lebih dulu">
+          <FormField label="Urutan Tampil">
             <input
               type="number"
               min={0}
@@ -587,7 +581,7 @@ export default function MasterProgramPage() {
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Batal</button>
             <button type="submit" className="btn-primary min-w-[140px]" disabled={saving}>
-              {saving ? <><Spinner /> Menyimpan...</> : editing ? 'Simpan Perubahan' : 'Tambah Program'}
+              {saving ? <><Spinner /> Menyimpan...</> : editing ? 'Simpan Perubahan' : 'Tambah Kategori'}
             </button>
           </div>
         </form>
