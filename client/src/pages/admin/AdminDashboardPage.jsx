@@ -148,13 +148,13 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-black text-white tracking-tight">Dashboard Monitoring Realisasi</h1>
+                <h1 className="text-base sm:text-lg font-black text-white tracking-tight">Dashboard Data Realisasi Peserta Lulusan dan Data Serap Lulusan</h1>
                 <span className="rounded-full bg-gold-500/20 text-gold-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-gold-500/30">
                   Tahun {year}
                 </span>
               </div>
               <p className="text-xs text-navy-200 mt-0.5 max-w-2xl">
-                Ringkasan akumulasi realisasi peserta &amp; lulusan Diklat seluruh UPT Kementerian Perhubungan.
+                Realisasi peserta &amp; lulusan serta serapan lulusan seluruh UPT Kementerian Perhubungan.
               </p>
             </div>
           </div>
@@ -233,8 +233,8 @@ export default function AdminDashboardPage() {
                 <div key={m.matra} className="card p-5 hover:shadow-lg transition-all duration-300 border-surface-border">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-extrabold text-navy-900">Matra {m.label}</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-extrabold text-navy-900 whitespace-nowrap">Matra {m.label}</h3>
                         <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${c.badge}`}>
                           {m.uptCount} UPT
                         </span>

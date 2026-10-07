@@ -94,8 +94,9 @@ router.get("/admin", requireAdmin, async (req, res) => {
       for (const r of list) {
         const idx = Number(r.month) - 1;
         if (idx >= 0 && idx < 12) {
-          monthlySeries[idx].peserta += Number(r.totalPeserta || r.pesertaL || 0) + Number(r.pesertaP || 0);
-          monthlySeries[idx].lulusan += Number(r.totalLulusan || r.lulusanL || 0) + Number(r.lulusanP || 0);
+          // totalPeserta/totalLulusan sudah = L+P di DB; jangan tambahkan P lagi (double-count).
+          monthlySeries[idx].peserta += Number(r.totalPeserta) || ((Number(r.pesertaL) || 0) + (Number(r.pesertaP) || 0));
+          monthlySeries[idx].lulusan += Number(r.totalLulusan) || ((Number(r.lulusanL) || 0) + (Number(r.lulusanP) || 0));
         }
       }
     }
