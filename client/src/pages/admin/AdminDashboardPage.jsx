@@ -118,6 +118,36 @@ export default function AdminDashboardPage() {
 
   // Data diagram progress capaian per UPT — memoize agar referensi stabil
   const uptAch = useMemo(() => data?.uptAchievements || [], [data?.uptAchievements])
+
+  // Total nasional dihitung dari rekap per-UPT (rumus L+P yang benar),
+  // agar selalu sama dengan card matra & Detail Realisasi.
+  const nationalTotals = useMemo(() => {
+    let peserta = 0
+    let lulusan = 0
+    for (const u of uptAch) {
+      peserta += Number(u.achievement?.totalPeserta) || 0
+      lulusan += Number(u.achievement?.totalLulusan) || 0
+    }
+    return { peserta, lulusan }
+  }, [uptAch])
+
+  // Seri bulanan gabungan dihitung dari rincian per-UPT per-bulan (bukan dari
+  // agregat server), agar konsisten dengan total nasional di semua versi API.
+  const monthlyCombined = useMemo(() => {
+    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+    const series = labels.map((label, i) => ({ month: i + 1, label, peserta: 0, lulusan: 0 }))
+    for (const u of uptAch) {
+      const months = u.achievement?.monthly || []
+      for (const m of months) {
+        const idx = Number(m.month) - 1
+        if (idx >= 0 && idx < 12) {
+          series[idx].peserta += Number(m.totalPeserta) || 0
+          series[idx].lulusan += Number(m.totalLulusan) || 0
+        }
+      }
+    }
+    return series
+  }, [uptAch])
   const chartData = useMemo(() => {
     const withProgress = uptAch.filter((u) => u.progress != null)
     const items = [...withProgress]
@@ -191,14 +221,14 @@ export default function AdminDashboardPage() {
             <StatCard
               icon={<IconPeople className="h-6 w-6" />}
               label="Total Peserta"
-              value={fmtNum(stats.totalPeserta)}
+              value={fmtNum(nationalTotals.peserta)}
               sub={`Total akumulasi ${year}`}
               tone="navy"
             />
             <StatCard
               icon={<IconGraduation className="h-6 w-6" />}
               label="Total Lulusan"
-              value={fmtNum(stats.totalLulusan)}
+              value={fmtNum(nationalTotals.lulusan)}
               sub={`Total akumulasi ${year}`}
               tone="gold"
               delay={60}
@@ -290,7 +320,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="p-4 sm:p-5 h-[340px] flex-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.monthlySeries} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
+                  <BarChart data={monthlyCombined} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
