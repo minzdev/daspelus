@@ -172,7 +172,7 @@ export default function MasterProgramPage() {
         if (addMode === 'child') body.parentId = childParentId
         await api.post('/programs', body)
         toast.success(
-          addMode === 'child' ? 'Program turunan ditambahkan' : 'Program induk ditambahkan',
+          addMode === 'child' ? 'Jenis diklat ditambahkan' : 'Program induk ditambahkan',
           `"${form.name}"`
         )
       }
@@ -214,7 +214,7 @@ export default function MasterProgramPage() {
   const modalTitle = editing
     ? `Edit Kategori Diklat`
     : addMode === 'child'
-      ? 'Tambah Turunan'
+      ? 'Tambah Jenis Diklat'
       : 'Tambah Kategori Diklat'
 
   return (
@@ -265,10 +265,10 @@ export default function MasterProgramPage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-t border-surface-border pt-3">
             <p className="text-xs text-navy-500 order-2 sm:order-1">
               {activeGroup === 'semua' ? (
-                <>{parents.length} induk · {totalChildren} turunan</>
+                <>{parents.length} induk · {totalChildren} jenis diklat</>
               ) : (
                 <>
-                  <span className="font-bold text-navy-700 capitalize">{activeGroup}</span> — {groupedParents.length} induk · {groupedParents.reduce((s, p) => s + (p.children?.length || 0), 0)} turunan
+                  <span className="font-bold text-navy-700 capitalize">{activeGroup}</span> — {groupedParents.length} induk · {groupedParents.reduce((s, p) => s + (p.children?.length || 0), 0)} jenis diklat
                   <span className="text-navy-300"> · dari {parents.length} total</span>
                 </>
               )}
@@ -334,7 +334,7 @@ export default function MasterProgramPage() {
                               <TargetGroupBadge value={parent.targetGroup || 'semua'} />
                             </div>
                             <p className="text-[11px] text-navy-400">
-                              {parent.children?.length || 0} program turunan · urutan {parent.order || 0}
+                              {parent.children?.length || 0} jenis diklat · urutan {parent.order || 0}
                             </p>
                           </div>
                         </div>
@@ -346,21 +346,21 @@ export default function MasterProgramPage() {
                             <IconTrash className="h-3.5 w-3.5" /> Hapus
                           </button>
                           <button className="btn-primary btn-sm" onClick={() => openAddChild(parent)}>
-                            <IconPlus className="h-3.5 w-3.5" /> Turunan
+                            <IconPlus className="h-3.5 w-3.5" /> Jenis Diklat
                           </button>
                         </div>
                       </div>
                       {parent.children && parent.children.length > 0 ? (
                         <div className="table-wrap">
                           <table className="data-table">
-                            <thead><tr><th className="w-12">No</th><th>Program Turunan</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead>
+                            <thead><tr><th className="w-12">No</th><th>Jenis Diklat</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead>
                             <tbody>{parent.children.map((child, idx) => (
                               <tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>
                             ))}</tbody>
                           </table>
                         </div>
                       ) : (
-                        <div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada program turunan. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah turunan pertama</button></p></div>
+                        <div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada jenis diklat. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah jenis diklat pertama</button></p></div>
                       )}
                     </div>
                   ))}
@@ -388,22 +388,22 @@ export default function MasterProgramPage() {
                               <TargetGroupBadge value={parent.targetGroup || 'semua'} />
                             </div>
                             <p className="text-[11px] text-navy-400">
-                              {parent.children?.length || 0} program turunan · urutan {parent.order || 0}
+                              {parent.children?.length || 0} jenis diklat · urutan {parent.order || 0}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 md:ml-auto shrink-0">
                           <button className="btn-secondary btn-sm" onClick={() => openEdit(parent)}><IconEdit className="h-3.5 w-3.5" /> Edit</button>
                           <button className="btn-danger btn-sm" onClick={() => openDelete(parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button>
-                          <button className="btn-primary btn-sm" onClick={() => openAddChild(parent)}><IconPlus className="h-3.5 w-3.5" /> Turunan</button>
+                          <button className="btn-primary btn-sm" onClick={() => openAddChild(parent)}><IconPlus className="h-3.5 w-3.5" /> Jenis Diklat</button>
                         </div>
                       </div>
                       {parent.children && parent.children.length > 0 ? (
-                        <div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">No</th><th>Program Turunan</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (
+                        <div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">No</th><th>Jenis Diklat</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (
                         <tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>
                       ))}</tbody></table></div>
                       ) : (
-                        <div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada program turunan. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah turunan pertama</button></p></div>
+                        <div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada jenis diklat. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah jenis diklat pertama</button></p></div>
                       )}
                     </div>
                   ))}
@@ -416,9 +416,9 @@ export default function MasterProgramPage() {
                   <div className="space-y-4">{filtered.filter((p) => !['taruna','aparatur'].includes((p.targetGroup||'semua'))).map((parent) => (
                     <div key={parent.id} className="card overflow-hidden">
                       <div className="flex flex-col md:flex-row md:items-center gap-3 px-5 py-4 border-b border-surface-border bg-navy-50/40">
-                        <div className="flex items-center gap-3 min-w-0"><div className="h-9 w-9 shrink-0 rounded-lg bg-navy-800 text-gold-300 flex items-center justify-center"><IconLayers className="h-4.5 w-4.5" /></div><div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><p className="font-bold text-navy-900 text-sm truncate">{parent.name}</p><TargetGroupBadge value={parent.targetGroup || 'semua'} /></div><p className="text-[11px] text-navy-400">{parent.children?.length || 0} program turunan · urutan {parent.order || 0}</p></div></div><div className="flex items-center gap-2 md:ml-auto shrink-0"><button className="btn-secondary btn-sm" onClick={() => openEdit(parent)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button><button className="btn-primary btn-sm" onClick={() => openAddChild(parent)}><IconPlus className="h-3.5 w-3.5" /> Turunan</button></div>
+                        <div className="flex items-center gap-3 min-w-0"><div className="h-9 w-9 shrink-0 rounded-lg bg-navy-800 text-gold-300 flex items-center justify-center"><IconLayers className="h-4.5 w-4.5" /></div><div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><p className="font-bold text-navy-900 text-sm truncate">{parent.name}</p><TargetGroupBadge value={parent.targetGroup || 'semua'} /></div><p className="text-[11px] text-navy-400">{parent.children?.length || 0} jenis diklat · urutan {parent.order || 0}</p></div></div><div className="flex items-center gap-2 md:ml-auto shrink-0"><button className="btn-secondary btn-sm" onClick={() => openEdit(parent)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button><button className="btn-primary btn-sm" onClick={() => openAddChild(parent)}><IconPlus className="h-3.5 w-3.5" /> Jenis Diklat</button></div>
                       </div>
-                      {parent.children && parent.children.length > 0 ? (<div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">No</th><th>Program Turunan</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (<tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>))}</tbody></table></div>) : (<div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada program turunan. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah turunan pertama</button></p></div>)}
+                      {parent.children && parent.children.length > 0 ? (<div className="table-wrap"><table className="data-table"><thead><tr><th className="w-12">No</th><th>Jenis Diklat</th><th className="w-28">Unit Kerja</th><th className="w-24">Urutan</th><th className="w-48 text-right">Aksi</th></tr></thead><tbody>{parent.children.map((child, idx) => (<tr key={child.id}><td className="text-navy-400"><span className="inline-flex items-center gap-1"><IconChevronDown className="h-3 w-3 text-navy-300" />{idx + 1}</span></td><td className="font-semibold text-navy-900">{child.name}</td><td><TargetGroupBadge value={child.targetGroup || 'semua'} /></td><td className="text-navy-500 text-xs">{child.order || 0}</td><td><div className="flex items-center justify-end gap-1.5"><button className="btn-secondary btn-sm" onClick={() => openEdit(child)}><IconEdit className="h-3.5 w-3.5" /> Edit</button><button className="btn-danger btn-sm" onClick={() => openDelete(child, parent)}><IconTrash className="h-3.5 w-3.5" /> Hapus</button></div></td></tr>))}</tbody></table></div>) : (<div className="px-5 py-6 text-center"><p className="text-xs text-navy-400">Belum ada jenis diklat. <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>Tambah jenis diklat pertama</button></p></div>)}
                     </div>
                   ))}</div>
                 </div>
@@ -440,7 +440,7 @@ export default function MasterProgramPage() {
                           <TargetGroupBadge value={parent.targetGroup || 'semua'} />
                         </div>
                         <p className="text-[11px] text-navy-400">
-                          {parent.children?.length || 0} program turunan · urutan {parent.order || 0}
+                          {parent.children?.length || 0} jenis diklat · urutan {parent.order || 0}
                         </p>
                       </div>
                     </div>
@@ -459,7 +459,7 @@ export default function MasterProgramPage() {
                         className="btn-primary btn-sm"
                         onClick={() => openAddChild(parent)}
                       >
-                        <IconPlus className="h-3.5 w-3.5" /> Turunan
+                        <IconPlus className="h-3.5 w-3.5" /> Jenis Diklat
                       </button>
                     </div>
                   </div>
@@ -471,7 +471,7 @@ export default function MasterProgramPage() {
                     <thead>
                       <tr>
                         <th className="w-12">No</th>
-                        <th>Program Turunan</th>
+                        <th>Jenis Diklat</th>
                         <th className="w-28">Unit Kerja</th>
                         <th className="w-24">Urutan</th>
                         <th className="w-48 text-right">Aksi</th>
@@ -496,7 +496,7 @@ export default function MasterProgramPage() {
                               <button
                                 className="btn-danger btn-sm"
                                 onClick={() => openDelete(child, parent)}
-                                title="Hapus program turunan ini"
+                                title="Hapus jenis diklat ini"
                               >
                                 <IconTrash className="h-3.5 w-3.5" /> Hapus
                               </button>
@@ -510,9 +510,9 @@ export default function MasterProgramPage() {
               ) : (
                 <div className="px-5 py-6 text-center">
                   <p className="text-xs text-navy-400">
-                    Belum ada program turunan.{' '}
+                    Belum ada jenis diklat.{' '}
                     <button className="font-bold text-navy-700 underline underline-offset-2 hover:text-navy-900" onClick={() => openAddChild(parent)}>
-                      Tambah turunan pertama
+                      Tambah jenis diklat pertama
                     </button>
                   </p>
                 </div>
