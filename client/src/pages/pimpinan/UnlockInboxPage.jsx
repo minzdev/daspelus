@@ -66,7 +66,7 @@ export default function PimpinanUnlockInboxPage() {
       })
       toast.success(
         decision === 'approve'
-          ? 'Permohonan disetujui & diteruskan ke Pusbang.'
+          ? 'Permohonan disetujui & diteruskan ke Admin BPSDMP.'
           : 'Permohonan berhasil ditolak.',
         data.message
       )
@@ -117,7 +117,7 @@ export default function PimpinanUnlockInboxPage() {
                 Persetujuan Buka Kunci (Unlock)
               </h1>
               <p className="text-xs text-navy-200 mt-0.5 max-w-2xl">
-                Tinjau dan setujui permohonan pembukaan kunci data dari Admin UPT sebelum direkomendasikan ke Pusbang Matra dan disetujui final oleh Admin BPSDMP.
+                Tinjau dan setujui permohonan pembukaan kunci data dari Admin UPT untuk disetujui final oleh Admin BPSDMP.
               </p>
             </div>
           </div>
@@ -138,7 +138,7 @@ export default function PimpinanUnlockInboxPage() {
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2.5">
           Prosedur Buka Kunci Data:
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 flex items-center gap-2 text-slate-700">
             <span className="h-6 w-6 rounded-full bg-slate-200 text-slate-700 font-black flex items-center justify-center text-[10px]">1</span>
             <span className="font-semibold">Admin UPT Ajukan</span>
@@ -149,10 +149,6 @@ export default function PimpinanUnlockInboxPage() {
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 flex items-center gap-2 text-slate-700">
             <span className="h-6 w-6 rounded-full bg-slate-200 text-slate-700 font-black flex items-center justify-center text-[10px]">3</span>
-            <span className="font-semibold">Pusbang Rekomendasi</span>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 flex items-center gap-2 text-slate-700">
-            <span className="h-6 w-6 rounded-full bg-slate-200 text-slate-700 font-black flex items-center justify-center text-[10px]">4</span>
             <span className="font-semibold">Admin BPSDMP Final</span>
           </div>
         </div>
@@ -283,7 +279,7 @@ export default function PimpinanUnlockInboxPage() {
                       onClick={() => openDecisionModal(r, 'approve')}
                     >
                       <IconCheck className="h-4 w-4" />
-                      <span>Setujui &amp; Teruskan ke Pusbang</span>
+                      <span>Setujui &amp; Teruskan ke BPSDMP</span>
                     </button>
                     <button
                       className="btn-secondary !text-rose-700 !border-rose-300 hover:!bg-rose-50 !rounded-xl text-xs py-2 px-3.5 flex items-center gap-1.5"
@@ -313,10 +309,10 @@ export default function PimpinanUnlockInboxPage() {
         }
         body={
           modalData.decision === 'approve'
-            ? `Permohonan buka kunci akan disetujui Pimpinan UPT dan diteruskan ke Admin Pusbang Matra untuk verifikasi.`
+            ? `Permohonan buka kunci akan disetujui Pimpinan UPT dan diteruskan ke Admin BPSDMP untuk persetujuan final.`
             : `Permohonan buka kunci akan ditolak dan data tetap terkunci. Admin UPT wajib diberikan alasan penolakan.`
         }
-        confirmLabel={modalData.decision === 'approve' ? 'Setujui & Teruskan ke Pusbang' : 'Tolak Permohonan'}
+        confirmLabel={modalData.decision === 'approve' ? 'Setujui & Teruskan ke BPSDMP' : 'Tolak Permohonan'}
         confirmTone={modalData.decision === 'approve' ? 'primary' : 'danger'}
       >
         <div className="mt-3 w-full">

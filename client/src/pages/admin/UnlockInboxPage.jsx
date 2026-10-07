@@ -45,7 +45,7 @@ export default function AdminUnlockInboxPage() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="page-title">Persetujuan Unlock — BPSDMP</h1>
-          <p className="page-desc">Final approval unlock dari Pusbang. Setelah disetujui, UPT dapat edit kembali bulan tersebut.</p>
+          <p className="page-desc">Final approval unlock dari Pimpinan UPT. Setelah disetujui, UPT dapat edit kembali bulan tersebut.</p>
         </div>
         <button className="btn-secondary !rounded-xl" onClick={load}><IconRefresh className="h-4 w-4" /> Refresh</button>
       </div>

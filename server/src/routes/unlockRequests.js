@@ -11,10 +11,10 @@ router.use(authenticate);
 function canActForUnlock(user, unlockDoc) {
   const status = unlockDoc.status;
   if (status === "pending_pimpinan" && isPimpinan(user) && unlockDoc.uptId === user.uptId) return true;
-  if (status === "pending_pusbang" && isPusbang(user)) {
-    const matra = (user.pusbangMatra || "").toLowerCase();
-    return (unlockDoc.matra || "").toLowerCase() === matra;
-  }
+  // Alur baru: Pimpinan UPT -> Admin BPSDMP (tanpa Pusbang).
+  // pending_pusbang hanya sisa data lama: tetap bisa diproses Pusbang matra-nya
+  // atau langsung Admin BPSDMP agar tidak macet.
+  if (status === "pending_pusbang" && (isSuperAdmin(user) || (isPusbang(user) && (unlockDoc.matra || "").toLowerCase() === (user.pusbangMatra || "").toLowerCase()))) return true;
   if (status === "pending_bpsdmp" && isSuperAdmin(user)) return true;
   return false;
 }
@@ -183,8 +183,9 @@ router.patch("/:id/decision", async (req, res) => {
     if (decision === "reject") {
       nextStatus = "rejected";
     } else {
-      if (data.status === "pending_pimpinan") nextStatus = "pending_pusbang";
-      else if (data.status === "pending_pusbang") nextStatus = "pending_bpsdmp";
+      // Alur baru (sama seperti pelaporan): Pimpinan UPT -> Admin BPSDMP.
+      if (data.status === "pending_pimpinan") nextStatus = "pending_bpsdmp";
+      else if (data.status === "pending_pusbang") nextStatus = "pending_bpsdmp"; // sisa data lama
       else if (data.status === "pending_bpsdmp") nextStatus = "approved";
       else nextStatus = data.status;
     }

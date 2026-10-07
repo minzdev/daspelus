@@ -326,45 +326,17 @@ async function notifyUnlockRequestDecision({ doc, decision, note, user, nextStat
   }
 
   // Jika APPROVE:
-  if (nextStatus === 'pending_pusbang') {
-    // Pimpinan UPT menyetujui -> diteruskan ke Pusbang Matra
-    await sendNotification({
-      recipientRole: 'PUSBANG',
-      recipientMatra: doc.matra,
-      senderId: user?.id,
-      senderName: user?.name || user?.email,
-      title: `Permohonan Unlock Menunggu Rekomendasi Pusbang`,
-      message: `Pimpinan ${doc.uptName || doc.uptCode} telah menyetujui permohonan buka kunci ${typeLabel} (${periodLabel} ${doc.year}) dan meneruskan ke Pusbang Matra ${doc.matra?.toUpperCase()}.`,
-      category: 'request',
-      type: 'unlock_request',
-      link: '/pusbang/unlock',
-      metadata: { unlockId: doc.id, uptId: doc.uptId, matra: doc.matra },
-    });
-
-    // Ke Admin UPT
-    await sendNotification({
-      recipientRole: 'UPT_ADMIN',
-      recipientUptId: doc.uptId,
-      senderId: user?.id,
-      senderName: user?.name || user?.email,
-      title: `Permohonan Unlock Disetujui Pimpinan`,
-      message: `Permohonan buka kunci ${typeLabel} telah disetujui Pimpinan UPT dan diteruskan ke Admin Pusbang Matra.`,
-      category: 'forward',
-      type: 'unlock_request',
-      link: '/upt/riwayat',
-      metadata: { unlockId: doc.id },
-    });
-  } else if (nextStatus === 'pending_bpsdmp') {
-    // Pusbang merekomendasikan -> diteruskan ke Admin BPSDMP
+  if (nextStatus === 'pending_bpsdmp') {
+    // Pimpinan UPT menyetujui -> langsung ke Admin BPSDMP (tanpa Pusbang)
     await sendNotification({
       recipientRole: 'SUPER_ADMIN',
       senderId: user?.id,
       senderName: user?.name || user?.email,
-      title: `Permohonan Unlock Diteruskan Pusbang`,
-      message: `Admin Pusbang Matra ${doc.matra?.toUpperCase()} merekomendasikan permohonan buka kunci ${doc.uptName} (${typeLabel} ${periodLabel} ${doc.year}) untuk disetujui Admin BPSDMP.`,
+      title: `Permohonan Unlock Menunggu Persetujuan`,
+      message: `Pimpinan ${doc.uptName || doc.uptCode} telah menyetujui permohonan buka kunci ${typeLabel} (${periodLabel} ${doc.year}) untuk disetujui Admin BPSDMP.`,
       category: 'request',
       type: 'unlock_request',
-      link: '/admin/unlock-inbox',
+      link: '/admin/persetujuan?category=unlock',
       metadata: { unlockId: doc.id, uptId: doc.uptId, matra: doc.matra },
     });
 
@@ -374,8 +346,8 @@ async function notifyUnlockRequestDecision({ doc, decision, note, user, nextStat
       recipientUptId: doc.uptId,
       senderId: user?.id,
       senderName: user?.name || user?.email,
-      title: `Permohonan Unlock Direkomendasikan Pusbang`,
-      message: `Pusbang Matra telah merekomendasikan permohonan buka kunci Anda ke Admin BPSDMP. Menunggu persetujuan final.`,
+      title: `Permohonan Unlock Disetujui Pimpinan`,
+      message: `Permohonan buka kunci ${typeLabel} telah disetujui Pimpinan UPT dan diteruskan ke Admin BPSDMP. Menunggu persetujuan final.`,
       category: 'forward',
       type: 'unlock_request',
       link: '/upt/riwayat',
@@ -409,22 +381,6 @@ async function notifyUnlockRequestDecision({ doc, decision, note, user, nextStat
       link: '/pimpinan/inbox',
       metadata: { unlockId: doc.id },
     });
-
-    // Ke Pusbang
-    if (doc.matra) {
-      await sendNotification({
-        recipientRole: 'PUSBANG',
-        recipientMatra: doc.matra,
-        senderId: user?.id,
-        senderName: user?.name || user?.email,
-        title: `Permohonan Unlock Disetujui BPSDMP`,
-        message: `Permohonan buka kunci ${doc.uptName} (${typeLabel} ${doc.year}) telah disetujui final oleh Admin BPSDMP.`,
-        category: 'approval',
-        type: 'unlock_request',
-        link: '/pusbang/unlock',
-        metadata: { unlockId: doc.id },
-      });
-    }
   }
 }
 

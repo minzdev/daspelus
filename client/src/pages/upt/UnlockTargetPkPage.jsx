@@ -76,7 +76,7 @@ export default function UnlockTargetPkPage() {
         <div>
           <h1 className="page-title">Perubahan Target PK (Unlock Target PK)</h1>
           <p className="page-desc">
-            Target PK kini <strong>satu kali input per tahun</strong>. Ajukan pembukaan kunci Target PK {year} yang telah disetujui agar UPT Anda dapat memperbarui target (termasuk rincian diklat). Alur persetujuan: Pimpinan → Pusbang → BPSDMP.
+            Target PK kini <strong>satu kali input per tahun</strong>. Ajukan pembukaan kunci Target PK {year} yang telah disetujui agar UPT Anda dapat memperbarui target (termasuk rincian diklat). Alur persetujuan: Pimpinan UPT → Admin BPSDMP.
           </p>
         </div>
         <button className="btn-secondary !rounded-xl" onClick={load}>

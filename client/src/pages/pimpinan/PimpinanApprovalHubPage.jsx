@@ -352,7 +352,7 @@ export default function PimpinanApprovalHubPage() {
           subtitle: `Status: ${u.status.toUpperCase()} • ${u.reason || 'Perubahan data'}`,
           date: u.updatedAt || u.createdAt,
           status: u.status,
-          statusLabel: u.status === 'approved' ? 'Terbuka (Final BPSDMP)' : isApproved ? 'Diteruskan ke Pusbang' : 'Ditolak',
+          statusLabel: u.status === 'approved' ? 'Terbuka (Final BPSDMP)' : isApproved ? 'Diteruskan ke BPSDMP' : 'Ditolak',
           isApproved,
           raw: u,
         })
@@ -563,8 +563,8 @@ export default function PimpinanApprovalHubPage() {
       setConfirmState({
         open: true,
         title: 'Setujui & Teruskan Permohonan Buka Kunci?',
-        message: `Permohonan buka kunci ${item.title} akan disetujui Pimpinan dan diteruskan ke Pusbang Matra.`,
-        confirmText: 'Setujui & Teruskan ke Pusbang',
+        message: `Permohonan buka kunci ${item.title} akan disetujui Pimpinan dan diteruskan ke Admin BPSDMP.`,
+        confirmText: 'Setujui & Teruskan ke BPSDMP',
         confirmColor: 'primary',
         requiresNote: true,
         noteLabel: 'Catatan / Rekomendasi Pimpinan (Opsional):',
@@ -573,7 +573,7 @@ export default function PimpinanApprovalHubPage() {
           setActing(item.id)
           try {
             const { data } = await api.patch(`/unlock-requests/${item.rawId}/decision`, { decision: 'approve', note: noteInput })
-            toast.success('Permohonan Diteruskan', data.message || 'Berhasil diteruskan ke Pusbang')
+            toast.success('Permohonan Diteruskan', data.message || 'Berhasil diteruskan ke BPSDMP')
             await loadAll()
           } catch (err) {
             toast.error('Gagal memproses permohonan', apiError(err))

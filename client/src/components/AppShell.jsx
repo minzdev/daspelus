@@ -64,7 +64,6 @@ const PUSBANG_NAV = [
     items: [
       { to: '/pusbang/inbox-target', label: 'Persetujuan Target PK', icon: IconTarget },
       { to: '/pusbang/inbox', label: 'Persetujuan Laporan', icon: IconFileText },
-      { to: '/pusbang/unlock', label: 'Persetujuan Unlock', icon: IconUnlock },
       { to: '/pusbang/taruna-inbox', label: 'Verifikasi Taruna', icon: IconPeople },
     ],
   },

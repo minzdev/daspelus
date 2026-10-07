@@ -54,7 +54,7 @@ export default function UptUnlockPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Unlock Capaian</h1>
-          <p className="page-desc">Ajukan pembukaan kunci laporan realisasi capaian bulan yang sudah disetujui Pimpinan. Alur: Pimpinan → Pusbang → BPSDMP.</p>
+          <p className="page-desc">Ajukan pembukaan kunci laporan realisasi capaian bulan yang sudah disetujui Pimpinan. Alur: Pimpinan UPT → Admin BPSDMP.</p>
         </div>
         <button className="btn-secondary !rounded-xl" onClick={load}><IconRefresh className="h-4 w-4" /> Refresh</button>
       </div>
