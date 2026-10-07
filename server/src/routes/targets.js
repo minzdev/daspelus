@@ -1,6 +1,6 @@
 const express = require("express");
 const { authenticate, requireAdmin, requireUpt, isSuperAdmin, isPusbang, isPimpinan } = require("../middleware/auth");
-const { Target, TargetSubmission, Program, Upt, Submission, Realization, Diklat } = require("../models");
+const { Target, TargetSubmission, TargetRevision, Program, Upt, Submission, Realization, Diklat } = require("../models");
 const { audit } = require("../lib/audit");
 const notifier = require("../lib/notifier");
 const { Op, where, fn, col } = require("sequelize");
@@ -66,6 +66,59 @@ function classifyTargets(docs) {
   return { monthly, yearly };
 }
 
+/**
+ * Catat snapshot revisi Target PK (month=0) UPT/tahun bila nilai berubah.
+ * Dipanggil setelah PUT /my, POST /import, DELETE program. Kegagalan
+ * pencatatan tidak boleh menggagalkan simpan utama.
+ */
+async function recordTargetRevision({ uptId, year, trigger, user }) {
+  try {
+    const rows = await Target.findAll({ where: { uptId, year, month: 0 } });
+    const items = [];
+    let tp = 0, tl = 0;
+    for (const r of rows) {
+      const j = r.toJSON();
+      const p = Number(j.targetPeserta) || 0;
+      const l = Number(j.targetLulusan) || 0;
+      if (p + l <= 0) continue;
+      tp += p; tl += l;
+      items.push({ programId: String(j.programId), targetPeserta: p, targetLulusan: l });
+    }
+    items.sort((a, b) => a.programId.localeCompare(b.programId));
+    const signature = JSON.stringify({ tp, tl, items });
+    const latest = await TargetRevision.findOne({
+      where: { uptId, year },
+      order: [["revisionNo", "DESC"]],
+    });
+    if (latest) {
+      const lj = latest.toJSON();
+      const prevSig = JSON.stringify({
+        tp: Number(lj.targetPeserta) || 0,
+        tl: Number(lj.targetLulusan) || 0,
+        items: Array.isArray(lj.items) ? lj.items : [],
+      });
+      if (prevSig === signature) return null; // tidak berubah -> jangan duplikat
+      await TargetRevision.create({
+        uptId, year, revisionNo: (Number(lj.revisionNo) || 0) + 1,
+        trigger, targetPeserta: tp, targetLulusan: tl, items,
+        createdBy: user?.uid || user?.id || null,
+        createdByName: user?.name || user?.email || null,
+      });
+      return (Number(lj.revisionNo) || 0) + 1;
+    }
+    await TargetRevision.create({
+      uptId, year, revisionNo: 1,
+      trigger, targetPeserta: tp, targetLulusan: tl, items,
+      createdBy: user?.uid || user?.id || null,
+      createdByName: user?.name || user?.email || null,
+    });
+    return 1;
+  } catch (e) {
+    console.warn("[target-revision] gagal mencatat:", e.message);
+    return null;
+  }
+}
+
 // ============================================================================
 // ADMIN — read-only
 // ============================================================================
@@ -74,12 +127,13 @@ function classifyTargets(docs) {
 router.get("/", requireAdmin, async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
   try {
-    const [targetSnap, upts, programs, targetSubSnap, diklatSnap] = await Promise.all([
+    const [targetSnap, upts, programs, targetSubSnap, diklatSnap, revisionSnap] = await Promise.all([
       Target.findAll({ where: { year } }),
       Upt.findAll({ order: [["code", "ASC"]] }),
       getTargetablePrograms(),
       TargetSubmission.findAll({ where: { year, status: "approved" } }),
       Diklat.findAll({ where: { year } }),
+      TargetRevision.findAll({ where: { year }, order: [["uptId", "ASC"], ["revisionNo", "ASC"]] }),
     ]);
     const diklatByUpt = new Map();
     for (const d of diklatSnap) {
@@ -122,6 +176,27 @@ router.get("/", requireAdmin, async (req, res) => {
     }
 
     const progMap = new Map(programs.map((p) => [p.id, p]));
+
+    // Ringkasan revisi per UPT: PK Awal (revisi #1) vs PK Revisi (terakhir)
+    const revisionByUpt = new Map();
+    for (const revDoc of revisionSnap) {
+      const r = revDoc.toJSON();
+      if (!revisionByUpt.has(r.uptId)) revisionByUpt.set(r.uptId, []);
+      revisionByUpt.get(r.uptId).push(r);
+    }
+    const revisionSummary = (uptId) => {
+      const list = revisionByUpt.get(uptId) || [];
+      if (!list.length) return { count: 0, first: null, last: null };
+      const pick = (r) => ({
+        no: Number(r.revisionNo) || 0,
+        peserta: Number(r.targetPeserta) || 0,
+        lulusan: Number(r.targetLulusan) || 0,
+        total: (Number(r.targetPeserta) || 0) + (Number(r.targetLulusan) || 0),
+        at: r.createdAt || null,
+        trigger: r.trigger || null,
+      });
+      return { count: list.length, first: pick(list[0]), last: pick(list[list.length - 1]) };
+    };
 
     const targets = upts.map((upt) => {
       const monthlyDocs = (byUptMonthly.get(upt.id) || []).map((t) => t.toJSON());
@@ -194,6 +269,7 @@ router.get("/", requireAdmin, async (req, res) => {
         monthlyPeserta, monthlyLulusan, yearlyPeserta, yearlyLulusan,
         diklats: diklatByUpt.get(upt.id) || [],
         diklatCount: (diklatByUpt.get(upt.id) || []).length,
+        revision: revisionSummary(upt.id),
       };
     });
 
@@ -514,6 +590,7 @@ router.put("/my", requireUpt, async (req, res) => {
     }
 
     audit(req, "SAVE_TARGET", "target", `${uptId}_${y}`, { year: y, programs: setCount });
+    await recordTargetRevision({ uptId, year: y, trigger: "save", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
     res.json({
       message: `Target PK ${y} tersimpan — ${setCount} program (${diklatTargets.length} rincian diklat). Satu kali input, siap dikirim ke Pimpinan.`,
     });
@@ -715,6 +792,7 @@ router.post("/import", requireUpt, async (req, res) => {
     }
 
     audit(req, "IMPORT_TARGET_PK", "target", `${uptId}_${y}`, { year: y, updated: updatedCount, created: createdCount });
+    await recordTargetRevision({ uptId, year: y, trigger: "import", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
     res.json({
       message: `Berhasil import Target PK: ${createdCount} diklat baru dibuat, ${updatedCount} target diklat diperbarui (${savedProgs} program terdata).`,
       createdCount,
@@ -741,6 +819,7 @@ router.delete("/my/:year/:programId", requireUpt, async (req, res) => {
   try {
     await Target.destroy({ where: { uptId, year, programId } });
     audit(req, "DELETE_TARGET", "target", `${uptId}_${year}_${programId}`, { year });
+    await recordTargetRevision({ uptId, year, trigger: "delete", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
     res.json({ message: "Semua target program ini dihapus (bulanan & tahunan)." });
   } catch (err) {
     console.error(err);

@@ -60,7 +60,7 @@ export default function TargetPkPage() {
     <div className="animate-fadeUp space-y-5">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Target Perjanjian Kinerja</h1>
+          <h1 className="page-title">Target Perjanjian Kinerja Peserta dan Lulusan</h1>
           <p className="page-desc">Pantau target PK <strong>satu kali input</strong> per tahun + rincian diklat yang diisi mandiri oleh masing-masing UPT. Induk otomatis = jumlah turunan.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export default function TargetPkPage() {
       </div>
 
       <Alert type="info">
-        <strong>Mode pantau:</strong> Target PK kini diisi oleh <strong>masing-masing UPT</strong> melalui menu <em>Target PK</em> di akun UPT. Admin hanya memantau rekap di halaman ini.
+        <strong>Mode pantau:</strong> PK Target ini di isi oleh masing-masing UPT, admin BPSDMP hanya bisa lihat.
       </Alert>
 
       {error && <Alert type="error">{error}</Alert>}
@@ -140,10 +140,11 @@ export default function TargetPkPage() {
           <EmptyState icon={<IconSearch className="h-6 w-6" />} title="Tidak ditemukan" desc={`Tidak ada UPT yang cocok dengan "${search}".`} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: 760 }}>
+            <table className="w-full text-sm" style={{ minWidth: 900 }}>
               <thead>
                 <tr className="bg-slate-50/70 border-b border-slate-200/60">
                   <th className="text-left px-4 py-3 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">UPT</th>
+                  <th className="text-left px-3 py-3 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Riwayat Perubahan PK</th>
                   <th className="text-right px-3 py-3 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target Peserta</th>
                   <th className="text-right px-3 py-3 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target Lulusan</th>
                   <th className="text-right px-4 py-3 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Total</th>
@@ -168,6 +169,21 @@ export default function TargetPkPage() {
                         ) : (
                           <p className="text-[10px] text-slate-400 mt-0.5">Belum ada target</p>
                         )}
+                      </td>
+                      <td className="px-3 py-3">
+                        {(() => {
+                          const rev = t.revision || { count: 0, first: null, last: null }
+                          if (!hasTarget || !rev.count) return <span className="text-slate-300">—</span>
+                          return (
+                            <div className="text-[11px] leading-relaxed" title={rev.count > 1 ? `${rev.count}× simpan PK` : 'PK awal'}>
+                              <p className="text-slate-600">PK Awal: <strong className="text-slate-900 tabular-nums">{fmtNum(rev.first.total)}</strong></p>
+                              <p className="text-slate-600">PK Revisi: {rev.count > 1
+                                ? <strong className="text-amber-700 tabular-nums">{fmtNum(rev.last.total)}</strong>
+                                : <span className="text-slate-300">—</span>}
+                              </p>
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="px-3 py-3 text-right font-bold tabular-nums">{hasTarget ? fmtNum(v.peserta) : '—'}</td>
                       <td className="px-3 py-3 text-right font-bold tabular-nums">{hasTarget ? fmtNum(v.lulusan) : '—'}</td>

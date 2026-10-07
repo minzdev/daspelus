@@ -4,6 +4,7 @@ const Upt = require('./Upt');
 const Program = require('./Program');
 const Target = require('./Target');
 const TargetSubmission = require('./TargetSubmission');
+const TargetRevision = require('./TargetRevision');
 const Realization = require('./Realization');
 const Submission = require('./Submission');
 const UnlockRequest = require('./UnlockRequest');
@@ -30,6 +31,9 @@ Program.hasMany(Target, { foreignKey: 'programId', as: 'targets' });
 
 TargetSubmission.belongsTo(Upt, { foreignKey: 'uptId', as: 'upt' });
 Upt.hasMany(TargetSubmission, { foreignKey: 'uptId', as: 'targetSubmissions' });
+
+TargetRevision.belongsTo(Upt, { foreignKey: 'uptId', as: 'upt' });
+Upt.hasMany(TargetRevision, { foreignKey: 'uptId', as: 'targetRevisions' });
 
 Realization.belongsTo(Upt, { foreignKey: 'uptId', as: 'upt' });
 Realization.belongsTo(Program, { foreignKey: 'programId', as: 'program' });
@@ -81,6 +85,7 @@ const models = {
   Program,
   Target,
   TargetSubmission,
+  TargetRevision,
   Realization,
   Submission,
   UnlockRequest,
@@ -103,6 +108,7 @@ module.exports = {
   Program,
   Target,
   TargetSubmission,
+  TargetRevision,
   Realization,
   Submission,
   UnlockRequest,
