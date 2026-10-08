@@ -832,7 +832,7 @@ export default function UptDiklatPage() {
                 <span className="rounded-full bg-white/10 text-gold-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-white/15">Tahun {year}</span>
               </div>
               <p className="text-xs text-navy-200 mt-0.5">
-                Input <strong className="text-white">nama-nama diklat</strong> <strong className="text-white">{upt?.code || '—'}</strong> <span className="text-navy-100">{upt?.name || ''}</span>
+                Input <strong className="text-white">nama-nama diklat</strong> <span className="text-navy-100">{upt?.name || upt?.code || ''}</span>
               </p>
             </div>
           </div>
@@ -875,10 +875,6 @@ export default function UptDiklatPage() {
           <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input className="form-input !rounded-xl !pl-9" placeholder="Cari nama diklat... (mis. Pendidikan Karakter)" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="form-input !rounded-xl md:max-w-[260px] shrink-0" value={filterProg} onChange={(e) => setFilterProg(e.target.value)}>
-          <option value="">Semua Program</option>
-          {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
         <button
           className="btn-secondary !rounded-xl whitespace-nowrap"
           onClick={exportToExcel}
@@ -918,6 +914,7 @@ export default function UptDiklatPage() {
         <div className="card p-5 rounded-2xl border border-slate-200/60">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</p>
           <p className="mt-1 text-[28px] font-black tabular-nums">{diklatByProgram.size} <span className="text-sm font-bold text-slate-400">/ {leafPrograms.length}</span></p>
+          <p className="text-xs text-slate-500">{diklatByProgram.size} kategori diklat yang mempunyai nama-nama diklat</p>
         </div>
         <div className="card p-5 rounded-2xl border border-slate-200/60 bg-gradient-to-br from-navy-950 to-navy-900 text-white border-navy-800">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">Langkah Berikutnya</p>
