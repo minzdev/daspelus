@@ -1089,12 +1089,12 @@ export default function TargetPkUptPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: 640 }}>
+            <table className="w-full text-sm" style={{ minWidth: 720 }}>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/60">
                   <th className="text-left px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</th>
-                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700">Target Peserta</th>
-                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">Target Lulusan</th>
+                  <th className="text-right px-6 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700 w-36">Target Peserta</th>
+                  <th className="text-right px-6 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700 w-36">Target Lulusan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1115,8 +1115,8 @@ export default function TargetPkUptPage() {
                             <span className="line-clamp-2">{d.name}</span>
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-sky-800">{fmtNum(p)}</td>
-                        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-emerald-800">{fmtNum(l)}</td>
+                        <td className="px-6 py-2.5 text-right font-bold tabular-nums text-sky-800">{fmtNum(p)}</td>
+                        <td className="px-6 py-2.5 text-right font-bold tabular-nums text-emerald-800">{fmtNum(l)}</td>
                       </tr>
                     )
                   })
@@ -1127,11 +1127,8 @@ export default function TargetPkUptPage() {
                     rows.push(
                       <tr key={`induk-${g.parentId}`} className="bg-navy-50/60">
                         <td className="px-4 py-4">
-                          <p className="font-extrabold text-navy-900 leading-snug flex items-center gap-2 flex-wrap">
+                          <p className="font-extrabold text-navy-900 leading-snug">
                             {g.parentName}
-                            {g.children.length > 0 && (
-                              <span className="inline-flex items-center rounded-full bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5">induk auto</span>
-                            )}
                           </p>
                           <p className="text-xs text-slate-400 mt-0.5">
                             {g.children.length > 0
@@ -1139,8 +1136,8 @@ export default function TargetPkUptPage() {
                               : 'Total otomatis = jumlah rincian diklat di bawahnya'}
                           </p>
                         </td>
-                        <td className="px-3 py-4 text-right font-black tabular-nums text-sky-800 text-[15px]">{fmtNum(pkIndukP)}</td>
-                        <td className="px-3 py-4 text-right font-black tabular-nums text-emerald-800 text-[15px]">{fmtNum(pkIndukL)}</td>
+                        <td className="px-6 py-4 text-right font-black tabular-nums text-sky-800 text-[15px]">{fmtNum(pkIndukP)}</td>
+                        <td className="px-6 py-4 text-right font-black tabular-nums text-emerald-800 text-[15px]">{fmtNum(pkIndukL)}</td>
                       </tr>
                     )
                     // Diklat langsung di bawah induk (tanpa turunan)
@@ -1163,8 +1160,8 @@ export default function TargetPkUptPage() {
                             <p className="text-[11px] text-slate-400 mt-1 italic">Tanpa rincian diklat — angka langsung per program</p>
                           )}
                         </td>
-                        <td className="px-3 py-4 text-right font-bold tabular-nums text-sky-800">{fmtNum(pkP)}</td>
-                        <td className="px-3 py-4 text-right font-bold tabular-nums text-emerald-800">{fmtNum(pkL)}</td>
+                        <td className="px-6 py-4 text-right font-bold tabular-nums text-sky-800">{fmtNum(pkP)}</td>
+                        <td className="px-6 py-4 text-right font-bold tabular-nums text-emerald-800">{fmtNum(pkL)}</td>
                       </tr>
                     )
                     rows.push(...diklatRows(rincian, child.id))
