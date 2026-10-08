@@ -1092,115 +1092,82 @@ export default function TargetPkUptPage() {
             <table className="w-full text-sm" style={{ minWidth: 640 }}>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/60">
-                  <th className="text-left px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</th>
-                  <th className="text-right px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700 w-32">Target Peserta</th>
-                  <th className="text-right px-6 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700 w-32">Target Lulusan</th>
+                  <th className="text-left px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</th>
+                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700">Target Peserta</th>
+                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">Target Lulusan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {parentGroups.map((g) => {
                   const rows = []
-                  // ── Baris INDUK (auto-sum dari turunan) ──
+                  const diklatPL = (d, pid) => ({
+                    p: Number(d.targetByProgram?.[pid]?.targetPeserta ?? d.targetByProgram?.[pid]?.targetPk ?? d.targetPeserta) || 0,
+                    l: Number(d.targetByProgram?.[pid]?.targetLulusan ?? d.targetByProgram?.[pid]?.targetPk ?? d.targetLulusan) || 0,
+                  })
+                  // Baris rincian diklat ala tabel Input Diklat: • nama | P | L
+                  const diklatRows = (list, pid) => (list || []).map((d) => {
+                    const { p, l } = diklatPL(d, pid)
+                    return (
+                      <tr key={`d-${pid}-${d.id}`} className="bg-slate-50/40 hover:bg-slate-50/70">
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-600 leading-tight">
+                            <span className="text-sky-400 font-black shrink-0 pl-4">•</span>
+                            <span className="line-clamp-2">{d.name}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-sky-800">{fmtNum(p)}</td>
+                        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-emerald-800">{fmtNum(l)}</td>
+                      </tr>
+                    )
+                  })
+                  // ── Baris INDUK ──
                   if (g.parent) {
                     const pkIndukP = Number(progValPL(g.parentId, 'p')) || 0
                     const pkIndukL = Number(progValPL(g.parentId, 'l')) || 0
                     rows.push(
-                      <tr key={`induk-${g.parentId}`} className="bg-navy-50/60 align-top">
-                        <td className="px-5 py-4">
+                      <tr key={`induk-${g.parentId}`} className="bg-navy-50/60">
+                        <td className="px-4 py-4">
                           <p className="font-extrabold text-navy-900 leading-snug flex items-center gap-2 flex-wrap">
                             {g.parentName}
                             {g.children.length > 0 && (
                               <span className="inline-flex items-center rounded-full bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5">induk auto</span>
                             )}
                           </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
+                          <p className="text-xs text-slate-400 mt-0.5">
                             {g.children.length > 0
                               ? `Total otomatis = jumlah ${g.children.length} program turunan di bawahnya`
                               : 'Total otomatis = jumlah rincian diklat di bawahnya'}
                           </p>
-                          {(diklatByProgram.get(g.parentId) || []).length > 0 && (
-                            <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
-                              {(diklatByProgram.get(g.parentId) || []).map((d) => {
-                                const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[g.parentId] : null
-                                const dP = Number(tbp?.targetPeserta ?? tbp?.targetPk ?? d.targetPeserta) || 0
-                                const dL = Number(tbp?.targetLulusan ?? tbp?.targetPk ?? d.targetLulusan) || 0
-                                return (
-                                  <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
-                                    <span className="font-semibold text-slate-600">• {d.name}</span>
-                                    <span className="tabular-nums font-bold text-slate-700 whitespace-nowrap">{fmtNum(dP)} / {fmtNum(dL)}</span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
                         </td>
-                        <td className="px-4 py-4 text-right">
-                          <span className="inline-flex items-center rounded-full bg-sky-600 text-white px-3 py-1 text-xs font-black tabular-nums">
-                            {fmtNum(pkIndukP)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center rounded-full bg-emerald-600 text-white px-3 py-1 text-xs font-black tabular-nums">
-                            {fmtNum(pkIndukL)}
-                          </span>
-                        </td>
+                        <td className="px-3 py-4 text-right font-black tabular-nums text-sky-800 text-[15px]">{fmtNum(pkIndukP)}</td>
+                        <td className="px-3 py-4 text-right font-black tabular-nums text-emerald-800 text-[15px]">{fmtNum(pkIndukL)}</td>
                       </tr>
                     )
+                    // Diklat langsung di bawah induk (tanpa turunan)
+                    rows.push(...diklatRows(diklatByProgram.get(g.parentId) || [], g.parentId))
                   }
                   // ── Baris TURUNAN + rincian diklat ──
                   for (const child of g.children) {
                     const it = itemsByPid.get(child.id)
                     const rincian = (diklatByProgram.get(child.id) || []).filter((d) => d)
-                    const sumDiklatP = rincian.reduce((s, d) => {
-                      const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
-                      return s + (Number(tbp?.targetPeserta ?? tbp?.targetPk ?? d.targetPeserta) || 0)
-                    }, 0)
-                    const sumDiklatL = rincian.reduce((s, d) => {
-                      const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
-                      return s + (Number(tbp?.targetLulusan ?? tbp?.targetPk ?? d.targetLulusan) || 0)
-                    }, 0)
+                    const sumDiklatP = rincian.reduce((s, d) => s + diklatPL(d, child.id).p, 0)
+                    const sumDiklatL = rincian.reduce((s, d) => s + diklatPL(d, child.id).l, 0)
                     const pkP = rincian.length > 0 ? sumDiklatP : (Number(it?.targetPeserta ?? progValPL(child.id, 'p')) || 0)
                     const pkL = rincian.length > 0 ? sumDiklatL : (Number(it?.targetLulusan ?? progValPL(child.id, 'l')) || 0)
                     rows.push(
-                      <tr key={child.id} className="hover:bg-slate-50/60 align-top">
-                        <td className="px-5 py-4">
-                          <div className="flex items-start gap-2">
-                            <span className="mt-1.5 h-4 w-1 rounded-full bg-slate-300 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="font-bold text-slate-900">{child.name}</p>
-                              <p className="text-xs text-slate-500 mt-0.5">{g.parentName}</p>
-                              {rincian.length > 0 ? (
-                                <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
-                                  {rincian.map((d) => {
-                                    const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram[child.id] : null
-                                    const dP = Number(tbp?.targetPeserta ?? tbp?.targetPk ?? d.targetPeserta) || 0
-                                    const dL = Number(tbp?.targetLulusan ?? tbp?.targetPk ?? d.targetLulusan) || 0
-                                    return (
-                                      <div key={d.id} className="px-3 py-1.5 flex items-center justify-between gap-2 text-xs">
-                                        <span className="font-semibold text-slate-600">• {d.name}</span>
-                                        <span className="tabular-nums font-bold text-slate-700 whitespace-nowrap">{fmtNum(dP)} / {fmtNum(dL)}</span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              ) : (
-                                <p className="text-[11px] text-slate-400 mt-1.5 italic">Tanpa rincian diklat — angka langsung per program</p>
-                              )}
-                            </div>
-                          </div>
+                      <tr key={child.id} className="hover:bg-slate-50/60">
+                        <td className="px-4 py-4">
+                          <p className="font-bold text-slate-900">{child.name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{g.parentName}</p>
+                          {!rincian.length && (
+                            <p className="text-[11px] text-slate-400 mt-1 italic">Tanpa rincian diklat — angka langsung per program</p>
+                          )}
                         </td>
-                        <td className="px-4 py-4 text-right">
-                          <span className="inline-flex items-center rounded-xl bg-sky-50 text-sky-900 border border-sky-200 px-3 py-1 text-xs font-black tabular-nums">
-                            {fmtNum(pkP)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200 px-3 py-1 text-xs font-black tabular-nums">
-                            {fmtNum(pkL)}
-                          </span>
-                        </td>
+                        <td className="px-3 py-4 text-right font-bold tabular-nums text-sky-800">{fmtNum(pkP)}</td>
+                        <td className="px-3 py-4 text-right font-bold tabular-nums text-emerald-800">{fmtNum(pkL)}</td>
                       </tr>
                     )
+                    rows.push(...diklatRows(rincian, child.id))
                   }
                   return rows
                 })}
