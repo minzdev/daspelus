@@ -621,15 +621,16 @@ export default function InputRealisasiPage() {
         <div className="w-full overflow-hidden rounded-2xl">
           <table className="w-full" style={{ tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '3.2%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '10.8%' }} />
-              <col style={{ width: '10.8%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '10.8%' }} />
-              <col style={{ width: '10.8%' }} />
-              <col style={{ width: '9%' }} />
+              <col style={{ width: '3%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '8.5%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '8.5%' }} />
+              <col style={{ width: '8.5%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '8.5%' }} />
             </colgroup>
             <thead>
               <tr className="bg-slate-900 text-white">
@@ -638,7 +639,7 @@ export default function InputRealisasiPage() {
                 <th colSpan={4} className="text-center !text-white !bg-sky-700 !border-sky-800 !py-2.5">
                   <span className="inline-flex items-center justify-center gap-1.5 text-[11px] font-black tracking-[0.08em] w-full"><span className="h-1.5 w-1.5 rounded-full bg-white/90" /> PESERTA</span>
                 </th>
-                <th colSpan={3} className="text-center !text-white !bg-emerald-700 !border-emerald-800 !py-2.5">
+                <th colSpan={4} className="text-center !text-white !bg-emerald-700 !border-emerald-800 !py-2.5">
                   <span className="inline-flex items-center justify-center gap-1.5 text-[11px] font-black tracking-[0.08em] w-full"><span className="h-1.5 w-1.5 rounded-full bg-white/90" /> LULUSAN</span>
                 </th>
               </tr>
@@ -647,6 +648,7 @@ export default function InputRealisasiPage() {
                 <th className="text-center !py-2.5 !px-1 !text-sky-800 bg-sky-50 border border-sky-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Laki-laki <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-sky-800 bg-sky-50 border border-sky-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Perempuan <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-white bg-sky-600 border border-sky-600 text-[11px] font-black align-middle">TOTAL</th>
+                <th title="Target PK lulusan sebagai acuan" className="text-center !py-2.5 !px-1 !text-emerald-800 bg-emerald-50 border border-emerald-200 text-[11px] font-black align-middle">PK</th>
                 <th className="text-center !py-2.5 !px-1 !text-emerald-800 bg-emerald-50 border border-emerald-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Laki-laki <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-emerald-800 bg-emerald-50 border border-emerald-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Perempuan <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-white bg-emerald-600 border border-emerald-600 text-[11px] font-black align-middle">TOTAL</th>
@@ -664,13 +666,20 @@ export default function InputRealisasiPage() {
                 const pesertaTotal = pesertaL + pesertaP
                 const lulusanTotal = lulusanL + lulusanP
                 const isInvalidRow = lulusanL > pesertaL || lulusanP > pesertaP
-                // Target PK peserta sebagai acuan kolom PK (induk = jumlah turunan)
+                // Target PK peserta & lulusan sebagai acuan kolom PK (induk = jumlah turunan)
                 const pkPeserta = (() => {
                   if (p.isParent || parentsWithChildren.has(p.id)) {
                     const kids = programs.filter((c) => c.parentId === p.id)
                     return kids.reduce((s, k) => s + (targetSingle.byProgram[k.id]?.peserta || 0), 0)
                   }
                   return targetSingle.byProgram[p.id]?.peserta || 0
+                })()
+                const pkLulusan = (() => {
+                  if (p.isParent || parentsWithChildren.has(p.id)) {
+                    const kids = programs.filter((c) => c.parentId === p.id)
+                    return kids.reduce((s, k) => s + (targetSingle.byProgram[k.id]?.lulusan || 0), 0)
+                  }
+                  return targetSingle.byProgram[p.id]?.lulusan || 0
                 })()
 
                 return (
@@ -690,11 +699,6 @@ export default function InputRealisasiPage() {
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="font-extrabold text-navy-950 text-[11px] leading-tight line-clamp-2">{p.name}</span>
-                            {autoSum && (
-                              <span className="rounded-full bg-navy-900 text-white text-[9px] font-extrabold px-1.5 py-0.5 whitespace-nowrap shrink-0">
-                                Otomatis
-                              </span>
-                            )}
                           </div>
                           {(() => {
                             const kids = programs.filter((c) => c.parentId === p.id)
@@ -708,9 +712,6 @@ export default function InputRealisasiPage() {
                         <div className="pl-2">
                           <span className="inline-flex items-center gap-1 font-semibold text-navy-700 text-[11px] leading-tight line-clamp-2">
                             <span className="text-navy-300 shrink-0">↳</span><span className="truncate">{p.name}</span>
-                            {hasDiklat && (
-                              <span className="rounded-full bg-sky-600 text-white text-[8px] font-extrabold px-1.5 py-px whitespace-nowrap shrink-0">otomatis</span>
-                            )}
                           </span>
                           {(() => {
                             const t = targetSingle.byProgram[p.id]
@@ -791,6 +792,15 @@ export default function InputRealisasiPage() {
                     <td className="p-1">
                       <div className={`tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border h-[30px] flex items-center justify-center ${pesertaTotal > 0 ? 'bg-sky-600 text-white border-sky-600 shadow-sm' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                         {fmtNum(pesertaTotal)}
+                      </div>
+                    </td>
+                    {/* Target PK lulusan (acuan, read-only) */}
+                    <td className="p-1">
+                      <div
+                        title="Target PK lulusan"
+                        className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 h-[30px] flex items-center justify-center"
+                      >
+                        {pkLulusan > 0 ? fmtNum(pkLulusan) : '–'}
                       </div>
                     </td>
                     {/* Lulusan Laki-laki */}
@@ -878,7 +888,6 @@ export default function InputRealisasiPage() {
                               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 leading-tight">
                                 <span className="text-sky-400 font-black shrink-0">•</span>
                                 <span className="line-clamp-2">{d.name}</span>
-                                <span className="rounded-full bg-sky-100 text-sky-700 text-[8px] font-extrabold px-1.5 py-px whitespace-nowrap shrink-0">diklat</span>
                               </span>
                             </td>
                             <td className="p-1">
@@ -908,6 +917,19 @@ export default function InputRealisasiPage() {
                               </div>
                             </td>
                             <td className="p-1">
+                              {(() => {
+                                const dPkL = Number(d.targetByProgram?.[p.id]?.targetLulusan) || Number(d.targetLulusan) || 0
+                                return (
+                                  <div
+                                    title="Target PK lulusan diklat"
+                                    className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-emerald-200/70 bg-emerald-50/60 text-emerald-900 h-[30px] flex items-center justify-center"
+                                  >
+                                    {dPkL > 0 ? fmtNum(dPkL) : '–'}
+                                  </div>
+                                )
+                              })()}
+                            </td>
+                            <td className="p-1">
                               <input inputMode="numeric" className={diklatLulusanCls(dLulusanL > 0)} placeholder="0" value={dv.lulusanL ?? '0'}
                                 onChange={(e) => handleDiklatNumChange(p.id, d.id, 'lulusanL', e.target.value)} disabled={dDisabled} aria-label={`Diklat ${d.name} Lulusan Laki-laki`} />
                             </td>
@@ -923,7 +945,7 @@ export default function InputRealisasiPage() {
                           </tr>
                           {dInvalid && (
                             <tr>
-                              <td colSpan={9} className="bg-red-50 px-3 py-1 text-[10px] font-bold text-red-600 text-center">
+                              <td colSpan={10} className="bg-red-50 px-3 py-1 text-[10px] font-bold text-red-600 text-center">
                                 ⚠️ Lulusan tidak boleh &gt; Peserta pada diklat "{d.name}"
                               </td>
                             </tr>
@@ -933,7 +955,7 @@ export default function InputRealisasiPage() {
                     })}
                     {isInvalidRow && !isParentRow && (
                       <tr>
-                        <td colSpan={9} className="bg-red-50 px-3 py-1.5 text-[10px] font-bold text-red-600 text-center border-b border-red-200">
+                        <td colSpan={10} className="bg-red-50 px-3 py-1.5 text-[10px] font-bold text-red-600 text-center border-b border-red-200">
                           ⚠️ {lulusanL > pesertaL ? `Laki-laki ${lulusanL} > ${pesertaL}` : ''}{lulusanL > pesertaL && lulusanP > pesertaP ? ' & ' : ''}{lulusanP > pesertaP ? `Perempuan ${lulusanP} > ${pesertaP}` : ''} — Lulusan tidak boleh &gt; Peserta pada "{p.name}"
                         </td>
                       </tr>
