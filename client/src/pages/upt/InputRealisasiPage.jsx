@@ -648,7 +648,7 @@ export default function InputRealisasiPage() {
                 <th className="text-center !py-2.5 !px-1 !text-sky-800 bg-sky-50 border border-sky-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Laki-laki <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-sky-800 bg-sky-50 border border-sky-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Perempuan <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-white bg-sky-600 border border-sky-600 text-[11px] font-black align-middle">TOTAL</th>
-                <th title="Target PK lulusan sebagai acuan" className="text-center !py-2.5 !px-1 !text-emerald-800 bg-emerald-50 border border-emerald-200 text-[11px] font-black align-middle">PK</th>
+                <th title="Target PK lulusan sebagai acuan" className="text-center !py-2.5 !px-1 !text-amber-800 bg-amber-50 border border-amber-200 text-[11px] font-black align-middle">PK</th>
                 <th className="text-center !py-2.5 !px-1 !text-emerald-800 bg-emerald-50 border border-emerald-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Laki-laki <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-emerald-800 bg-emerald-50 border border-emerald-100 text-[11px] font-extrabold leading-none align-middle whitespace-nowrap"><span className="inline-flex items-center justify-center w-full">Perempuan <span className="text-amber-600 ml-0.5">*</span></span></th>
                 <th className="text-center !py-2.5 !px-1 !text-white bg-emerald-600 border border-emerald-600 text-[11px] font-black align-middle">TOTAL</th>
@@ -798,7 +798,7 @@ export default function InputRealisasiPage() {
                     <td className="p-1">
                       <div
                         title="Target PK lulusan"
-                        className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 h-[30px] flex items-center justify-center"
+                        className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-amber-200 bg-amber-50 text-amber-900 h-[30px] flex items-center justify-center"
                       >
                         {pkLulusan > 0 ? fmtNum(pkLulusan) : '–'}
                       </div>
@@ -922,7 +922,7 @@ export default function InputRealisasiPage() {
                                 return (
                                   <div
                                     title="Target PK lulusan diklat"
-                                    className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-emerald-200/70 bg-emerald-50/60 text-emerald-900 h-[30px] flex items-center justify-center"
+                                    className="tabular-nums text-center !py-1 text-[11px] font-black rounded-lg border border-amber-200/70 bg-amber-50/60 text-amber-900 h-[30px] flex items-center justify-center"
                                   >
                                     {dPkL > 0 ? fmtNum(dPkL) : '–'}
                                   </div>
