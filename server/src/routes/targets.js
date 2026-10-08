@@ -68,9 +68,29 @@ function classifyTargets(docs) {
 
 /**
  * Catat snapshot revisi Target PK (month=0) UPT/tahun bila nilai berubah.
+ * Alur yang dijaga: PK diinput SEKALI per tahun, terkunci setelah dikirim/
+ * disetujui. Revisi hanya lewat pengajuan unlock (status draft) — angka yang
+ * dipakai di seluruh laporan/dashboard SELALU data Target terkini (month=0),
+ * sedangkan TargetRevision menyimpan riwayat lengkap: Target Awal (revisi #1)
+ * + setiap perubahan angka beserta waktunya.
  * Dipanggil setelah PUT /my, POST /import, DELETE program. Kegagalan
  * pencatatan tidak boleh menggagalkan simpan utama.
  */
+const LOCKED_TARGET_STATUSES = ["pending_pimpinan", "pending_bpsdmp", "approved"];
+function isTargetLocked(status) {
+  return LOCKED_TARGET_STATUSES.includes(status);
+}
+/** Normalisasi label pemicu agar konsisten: awal vs revisi (+sumber). */
+function normalizeRevisionTrigger(raw, isFirst) {
+  const src = String(raw || "save").toLowerCase();
+  if (isFirst) {
+    if (src.includes("import")) return "awal (import)";
+    return "awal";
+  }
+  if (src.includes("import")) return "revisi (import)";
+  if (src.includes("delete") || src.includes("hapus")) return "revisi (hapus program)";
+  return "revisi";
+}
 async function recordTargetRevision({ uptId, year, trigger, user }) {
   try {
     const rows = await Target.findAll({ where: { uptId, year, month: 0 } });
@@ -98,17 +118,19 @@ async function recordTargetRevision({ uptId, year, trigger, user }) {
         items: Array.isArray(lj.items) ? lj.items : [],
       });
       if (prevSig === signature) return null; // tidak berubah -> jangan duplikat
+      const label = normalizeRevisionTrigger(trigger, false);
       await TargetRevision.create({
         uptId, year, revisionNo: (Number(lj.revisionNo) || 0) + 1,
-        trigger, targetPeserta: tp, targetLulusan: tl, items,
+        trigger: label, targetPeserta: tp, targetLulusan: tl, items,
         createdBy: user?.uid || user?.id || null,
         createdByName: user?.name || user?.email || null,
       });
       return (Number(lj.revisionNo) || 0) + 1;
     }
+    const label = normalizeRevisionTrigger(trigger, true);
     await TargetRevision.create({
       uptId, year, revisionNo: 1,
-      trigger, targetPeserta: tp, targetLulusan: tl, items,
+      trigger: label, targetPeserta: tp, targetLulusan: tl, items,
       createdBy: user?.uid || user?.id || null,
       createdByName: user?.name || user?.email || null,
     });
@@ -117,6 +139,47 @@ async function recordTargetRevision({ uptId, year, trigger, user }) {
     console.warn("[target-revision] gagal mencatat:", e.message);
     return null;
   }
+}
+/** Bentuk satu baris riwayat revisi untuk API (lengkap + selisih vs sebelumnya). */
+function shapeRevisionRow(revJson, prevJson, programMap) {
+  const p = Number(revJson.targetPeserta) || 0;
+  const l = Number(revJson.targetLulusan) || 0;
+  const pp = prevJson ? Number(prevJson.targetPeserta) || 0 : 0;
+  const pl = prevJson ? Number(prevJson.targetLulusan) || 0 : 0;
+  const items = Array.isArray(revJson.items) ? revJson.items : [];
+  const prevItems = new Map(
+    (prevJson && Array.isArray(prevJson.items) ? prevJson.items : []).map((it) => [String(it.programId), it])
+  );
+  return {
+    no: Number(revJson.revisionNo) || 0,
+    peserta: p,
+    lulusan: l,
+    total: p + l,
+    at: revJson.createdAt || null,
+    trigger: revJson.trigger || null,
+    kind: Number(revJson.revisionNo) === 1 ? "awal" : "revisi",
+    createdByName: revJson.createdByName || null,
+    deltaPeserta: prevJson ? p - pp : 0,
+    deltaLulusan: prevJson ? l - pl : 0,
+    deltaTotal: prevJson ? p + l - (pp + pl) : 0,
+    items: items.map((it) => {
+      const pid = String(it.programId);
+      const prev = prevItems.get(pid);
+      const cp = Number(it.targetPeserta) || 0;
+      const cl = Number(it.targetLulusan) || 0;
+      const qp = prev ? Number(prev.targetPeserta) || 0 : 0;
+      const ql = prev ? Number(prev.targetLulusan) || 0 : 0;
+      return {
+        programId: pid,
+        programName: (programMap && programMap.get(pid)) || null,
+        targetPeserta: cp,
+        targetLulusan: cl,
+        deltaPeserta: prev ? cp - qp : 0,
+        deltaLulusan: prev ? cl - ql : 0,
+        isNew: !prev && (cp + cl) > 0,
+      };
+    }),
+  };
 }
 
 // ============================================================================
@@ -177,16 +240,18 @@ router.get("/", requireAdmin, async (req, res) => {
 
     const progMap = new Map(programs.map((p) => [p.id, p]));
 
-    // Ringkasan revisi per UPT: PK Awal (revisi #1) vs PK Revisi (terakhir)
+    // Riwayat revisi per UPT: Target Awal (#1) + seluruh revisi (angka+waktu).
+    // Angka yang dipakai = data Target terkini (month=0) di bawah.
     const revisionByUpt = new Map();
     for (const revDoc of revisionSnap) {
       const r = revDoc.toJSON();
       if (!revisionByUpt.has(r.uptId)) revisionByUpt.set(r.uptId, []);
       revisionByUpt.get(r.uptId).push(r);
     }
+    const progNameLookup = new Map(programs.map((p) => [String(p.id), p.name]));
     const revisionSummary = (uptId) => {
       const list = revisionByUpt.get(uptId) || [];
-      if (!list.length) return { count: 0, first: null, last: null };
+      if (!list.length) return { count: 0, first: null, last: null, history: [] };
       const pick = (r) => ({
         no: Number(r.revisionNo) || 0,
         peserta: Number(r.targetPeserta) || 0,
@@ -194,8 +259,13 @@ router.get("/", requireAdmin, async (req, res) => {
         total: (Number(r.targetPeserta) || 0) + (Number(r.targetLulusan) || 0),
         at: r.createdAt || null,
         trigger: r.trigger || null,
+        kind: Number(r.revisionNo) === 1 ? "awal" : "revisi",
+        createdByName: r.createdByName || null,
       });
-      return { count: list.length, first: pick(list[0]), last: pick(list[list.length - 1]) };
+      const history = list.map((r, idx) =>
+        shapeRevisionRow(r, idx > 0 ? list[idx - 1] : null, progNameLookup)
+      );
+      return { count: list.length, first: pick(list[0]), last: pick(list[list.length - 1]), history };
     };
 
     const targets = upts.map((upt) => {
@@ -407,22 +477,18 @@ router.get("/my", requireUpt, async (req, res) => {
     const targetSubmissions = subSnap.map((s) => s.toJSON());
     const isApproved = subSnap.some((s) => Number(s.month) === 0 && s.status === "approved");
 
-    // Riwayat Target PK: Target Awal (revisi #1) vs Target Revisi (terkini)
+    // Riwayat Target PK lengkap: Target Awal (revisi #1) + setiap revisi
+    // (angka + waktu tercatat semua). Angka yang dipakai laporan/dashboard
+    // selalu Target terkini (dokumen month=0), bukan snapshot lama.
     const revisionDocs = await TargetRevision.findAll({
       where: { uptId, year },
       order: [["revisionNo", "ASC"]],
     });
-    const revisions = revisionDocs.map((r) => {
-      const j = r.toJSON();
-      const p = Number(j.targetPeserta) || 0;
-      const l = Number(j.targetLulusan) || 0;
-      return {
-        no: Number(j.revisionNo) || 0,
-        peserta: p, lulusan: l, total: p + l,
-        at: j.createdAt || null,
-        trigger: j.trigger || null,
-      };
-    });
+    const revNameMap = new Map(programs.map((p) => [String(p.id), p.name]));
+    const revJsons = revisionDocs.map((r) => r.toJSON());
+    const revisions = revJsons.map((j, idx) =>
+      shapeRevisionRow(j, idx > 0 ? revJsons[idx - 1] : null, revNameMap)
+    );
 
     res.json({ year, programs, target, diklats, upt: uptDoc.toJSON(), approvedMonths: [...approvedMonths], targetSubmissions, isApproved, revisions });
   } catch (err) {
@@ -445,6 +511,83 @@ router.get("/history", requireUpt, async (req, res) => {
 });
 
 /**
+ * GET /api/targets/my/revisions?year=2026 — riwayat lengkap Target PK milik UPT:
+ * Target Awal (#1) + seluruh revisi (angka + waktu + selisih). Angka yang
+ * dipakai laporan/dashboard selalu revisi terakhir.
+ */
+router.get("/my/revisions", requireUpt, async (req, res) => {
+  const uptId = req.user.uptId;
+  if (!uptId) return res.status(400).json({ error: "Akun belum tertaut ke UPT." });
+  const year = Number(req.query.year) || new Date().getFullYear();
+  try {
+    const [docs, progs] = await Promise.all([
+      TargetRevision.findAll({ where: { uptId, year }, order: [["revisionNo", "ASC"]] }),
+      Program.findAll(),
+    ]);
+    const progNameMap = new Map(progs.map((p) => [String(p.id), p.name]));
+    const jsons = docs.map((d) => d.toJSON());
+    const revisions = jsons.map((j, idx) =>
+      shapeRevisionRow(j, idx > 0 ? jsons[idx - 1] : null, progNameMap)
+    );
+    res.json({
+      year,
+      count: revisions.length,
+      first: revisions[0] || null,
+      last: revisions[revisions.length - 1] || null,
+      revisions,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gagal mengambil riwayat revisi Target PK." });
+  }
+});
+
+/**
+ * GET /api/targets/revisions?year=2026&uptId=... — riwayat lengkap per UPT
+ * untuk Admin BPSDMP / Pusbang / Pimpinan (read-only).
+ */
+router.get("/revisions", async (req, res) => {
+  const user = req.user;
+  const year = Number(req.query.year) || new Date().getFullYear();
+  let uptId = req.query.uptId || user.uptId || null;
+  try {
+    if (isSuperAdmin(user)) {
+      if (!uptId) return res.status(400).json({ error: "Parameter uptId wajib diisi." });
+    } else if (isPusbang(user)) {
+      if (!uptId) return res.status(400).json({ error: "Parameter uptId wajib diisi." });
+      const uptDoc = await Upt.findByPk(uptId);
+      if (!uptDoc || (uptDoc.matra || "").toLowerCase() !== (user.pusbangMatra || "").toLowerCase()) {
+        return res.status(403).json({ error: "Anda hanya dapat melihat riwayat matra Anda sendiri." });
+      }
+    } else if (isPimpinan(user) || user.role === "UPT_ADMIN" || user.role === "UPT") {
+      uptId = user.uptId;
+      if (!uptId) return res.status(400).json({ error: "Akun belum tertaut ke UPT." });
+    } else {
+      return res.status(403).json({ error: "Akses tidak diizinkan." });
+    }
+    const [docs, progs] = await Promise.all([
+      TargetRevision.findAll({ where: { uptId, year }, order: [["revisionNo", "ASC"]] }),
+      Program.findAll(),
+    ]);
+    const progNameMap = new Map(progs.map((p) => [String(p.id), p.name]));
+    const jsons = docs.map((d) => d.toJSON());
+    const revisions = jsons.map((j, idx) =>
+      shapeRevisionRow(j, idx > 0 ? jsons[idx - 1] : null, progNameMap)
+    );
+    res.json({
+      year, uptId,
+      count: revisions.length,
+      first: revisions[0] || null,
+      last: revisions[revisions.length - 1] || null,
+      revisions,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gagal mengambil riwayat revisi Target PK." });
+  }
+});
+
+/**
  * PUT /api/targets/my - (UPT) upsert target SINGLE-INPUT (satu kali per tahun).
  * Body:
  *  - items: [{ programId, targetPeserta, targetLulusan }] untuk program tanpa rincian diklat
@@ -463,11 +606,11 @@ router.put("/my", requireUpt, async (req, res) => {
     const uptDoc = await Upt.findByPk(uptId);
     if (!uptDoc) return res.status(404).json({ error: "UPT tidak ditemukan." });
 
-    // Kunci: jika Target PK single tahun ini sudah dikirim/disetujui, tolak edit
+    // Kunci: PK diinput sekali — jika sudah dikirim/disetujui, wajib unlock dulu
     const tSid = `${uptId}_${y}_00`;
     const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
-    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
-      return res.status(403).json({ error: `Target PK ${y} sudah dikirim ke Pimpinan dan terkunci (${tSub.status}). Ajukan Perubahan Target PK untuk revisi.` });
+    if (tSub && isTargetLocked(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Ajukan Perubahan Target PK (unlock) terlebih dahulu untuk merevisi.` });
     }
 
     // 1) Terapkan target per diklat (independen per program via targetByProgram)
@@ -627,8 +770,8 @@ router.post("/import", requireUpt, async (req, res) => {
 
     const tSid = `${uptId}_${y}_00`;
     const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
-    if (tSub && ["pending_pimpinan", "pending_bpsdmp", "approved"].includes(tSub.status)) {
-      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Ajukan Perubahan Target PK untuk merevisi target.` });
+    if (tSub && isTargetLocked(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${y} sudah dikirim dan terkunci (${tSub.status}). Ajukan Perubahan Target PK (unlock) terlebih dahulu untuk merevisi.` });
     }
 
     const rawItems = Array.isArray(req.body.items) ? req.body.items : [];
@@ -848,17 +991,22 @@ router.put("/my/yearly", requireUpt, async (req, res) => {
   return res.status(410).json({ error: "Endpoint tahunan/bulanan dihapus. Gunakan PUT /api/targets/my satu kali input." });
 });
 
-/** DELETE /api/targets/my/:year/:programId */
+/** DELETE /api/targets/my/:year/:programId — ikut terkunci seperti PUT (wajib unlock dulu) */
 router.delete("/my/:year/:programId", requireUpt, async (req, res) => {
   const programId = req.params.programId;
   const year = Number(req.params.year);
   const uptId = req.user.uptId;
   if (!uptId) return res.status(400).json({ error: "Akun Anda belum ditautkan ke UPT." });
   try {
+    const tSid = `${uptId}_${year}_00`;
+    const tSub = await TargetSubmission.findOne({ where: { id: tSid } });
+    if (tSub && isTargetLocked(tSub.status)) {
+      return res.status(403).json({ error: `Target PK ${year} terkunci (${tSub.status}). Ajukan Perubahan Target PK (unlock) terlebih dahulu.` });
+    }
     await Target.destroy({ where: { uptId, year, programId } });
     audit(req, "DELETE_TARGET", "target", `${uptId}_${year}_${programId}`, { year });
     await recordTargetRevision({ uptId, year, trigger: "delete", user: { uid: req.uid, name: req.user?.name, email: req.user?.email } });
-    res.json({ message: "Semua target program ini dihapus (bulanan & tahunan)." });
+    res.json({ message: "Target program ini dihapus. Riwayat perubahan tercatat otomatis." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Gagal menghapus target PK." });

@@ -204,11 +204,14 @@ router.patch("/:id/decision", async (req, res) => {
 
     await doc.update(updates);
 
-    // Jika approved final, buka kunci sesuai tipe pengajuan
+    // Jika approved final, buka kunci sesuai tipe pengajuan.
+    // Target PK single-input: id selalu `${uptId}_${year}_00`; data Target
+    // (month=0) dipertahankan — UPT merevisi lalu kirim ulang, angka terbaru
+    // yang dipakai, riwayat lama tetap terekam di TargetRevision.
     if (nextStatus === "approved") {
       const mStr = String(data.month).padStart(2, "0");
       if (data.type === 'target_pk') {
-        const tSid = `${data.uptId}_${data.year}_${mStr}`;
+        const tSid = `${data.uptId}_${data.year}_00`;
         await TargetSubmission.update({ status: "draft" }, { where: { id: tSid } });
       } else if (data.type === 'taruna') {
         const { TarunaSubmission } = require('../models');

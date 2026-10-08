@@ -14,7 +14,8 @@ import {
   IconCheck,
 } from '../../components/icons'
 import { useToast } from '../../components/Toast'
-import { fmtNum, fmtDate, yearOptions } from '../../utils/format'
+import { fmtNum, yearOptions } from '../../utils/format'
+import TargetRevisionHistory from '../../components/TargetRevisionHistory'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
 
 function parseNum(s) {
@@ -927,12 +928,27 @@ export default function TargetPkUptPage() {
         </div>
       </div>
 
+      {/* Alur tetap: input sekali → kunci → revisi via unlock (berlaku = terbaru) */}
+      <div className="rounded-2xl border border-navy-100 bg-navy-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex items-center gap-2 text-[11px] font-extrabold text-navy-900 whitespace-nowrap">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-navy-900 text-white text-[11px]">1</span> Input sekali
+          <span className="text-slate-300">→</span>
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-navy-900 text-white text-[11px]">2</span> Terkunci
+          <span className="text-slate-300">→</span>
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold-500 text-white text-[11px]">3</span> Revisi via unlock
+        </div>
+        <p className="text-[11px] text-slate-500 sm:ml-auto">Angka berlaku = update terakhir · setiap perubahan terekam di Riwayat di bawah</p>
+      </div>
+
       {/* Status */}
       <div className="flex flex-wrap items-center gap-2">
         {statusBadge}
         {submission?.rejectNote && <span className="text-xs text-red-600 font-semibold">Catatan: {submission.rejectNote}</span>}
         {isLocked && (
           <Link to="/upt/perubahan-target" className="text-xs font-bold text-sky-700 hover:underline ml-auto">Ajukan Perubahan / Unlock →</Link>
+        )}
+        {submission?.status === 'draft' && (
+          <span className="text-xs text-emerald-700 font-semibold ml-auto">Unlock disetujui — silakan revisi angka lalu kirim ulang ke Pimpinan.</span>
         )}
       </div>
 
@@ -981,50 +997,24 @@ export default function TargetPkUptPage() {
         </div>
       </div>
 
-      {/* Riwayat Target PK: Awal (pengisian pertama) vs Revisi (terkini).
-          Angka berjalan & laporan selalu memakai yang terkini. */}
-      {revisions.length > 0 && (() => {
-        const first = revisions[0]
-        const last = revisions[revisions.length - 1]
-        const revised = revisions.length > 1
-        return (
-          <div className="card rounded-2xl border border-slate-200/60 shadow-sm bg-white px-5 py-4">
-            <div className="flex items-center gap-2.5 mb-3">
-              <span className="h-8 w-8 rounded-xl bg-navy-900 text-gold-300 flex items-center justify-center text-sm">◷</span>
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Riwayat Target PK {year}</h3>
-                <p className="text-xs text-slate-500">Pengisian pertama = Target Awal · {revised ? `${revisions.length - 1}× revisi` : 'belum ada revisi'}</p>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target Awal</p>
-                <p className="mt-1 text-sm font-black tabular-nums text-slate-900">
-                  <span className="text-sky-700">P: {fmtNum(first.peserta)}</span>
-                  <span className="text-slate-300 mx-1">·</span>
-                  <span className="text-emerald-700">L: {fmtNum(first.lulusan)}</span>
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{first.at ? fmtDate(first.at) : ''}</p>
-              </div>
-              <div className={`rounded-xl border px-4 py-3 ${revised ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50/60'}`}>
-                <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target Revisi {revised ? `(ke-${last.no - 1})` : ''}</p>
-                {revised ? (
-                  <>
-                    <p className="mt-1 text-sm font-black tabular-nums text-slate-900">
-                      <span className="text-sky-700">P: {fmtNum(last.peserta)}</span>
-                      <span className="text-slate-300 mx-1">·</span>
-                      <span className="text-emerald-700">L: {fmtNum(last.lulusan)}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{last.at ? fmtDate(last.at) : ''}</p>
-                  </>
-                ) : (
-                  <p className="mt-1 text-xs text-slate-400 italic">Belum ada revisi — masih memakai Target Awal.</p>
-                )}
-              </div>
+      {/* Riwayat Target PK: alur tetap — input sekali, revisi via unlock.
+          Angka berlaku = update terakhir; Target Awal + setiap revisi
+          (angka & waktu) terekam lengkap di bawah. */}
+      {revisions.length > 0 && (
+        <div className="card rounded-2xl border border-slate-200/60 shadow-sm bg-white px-5 py-4">
+          <div className="flex items-center gap-2.5 mb-3">
+            <span className="h-8 w-8 rounded-xl bg-navy-900 text-gold-300 flex items-center justify-center text-sm">◷</span>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900">Riwayat Target PK {year}</h3>
+              <p className="text-xs text-slate-500">
+                Input sekali · revisi via pengajuan unlock · berlaku = update terakhir ·
+                {revisions.length > 1 ? ` ${revisions.length - 1}× revisi tercatat` : ' belum ada revisi'}
+              </p>
             </div>
           </div>
-        )
-      })()}
+          <TargetRevisionHistory revisions={revisions} year={year} />
+        </div>
+      )}
 
       {/* Tabel rincian & Toolbar */}
       <div className="card rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden bg-white">

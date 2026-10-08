@@ -113,7 +113,7 @@ const UPT_NAV = [
       { to: '/upt/target-pk', label: 'Input Target PK', icon: IconTarget },
       { to: '/upt/input', label: 'Input Realisasi', icon: IconInput },
       { to: '/upt/laporan', label: 'Laporan Realisasi', icon: IconFileText },
-      { to: '/upt/unlock-capaian', label: 'Unlock Capaian', icon: IconUnlock },
+      { to: '/upt/unlock-capaian', label: 'Unlock Capaian Realisasi', icon: IconUnlock },
       { to: '/upt/perubahan-target', label: 'Perubahan Target PK', icon: IconEdit },
     ],
   },

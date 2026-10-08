@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext'
 import clsx from 'clsx'
 
 import { buildRiwayatPdf } from '../../utils/riwayatPdf'
+import TargetRevisionHistory from '../../components/TargetRevisionHistory'
 
 /* Badge status generik untuk riwayat Taruna & Penyerapan */
 function statusBadgeFor(status) {
@@ -59,6 +60,7 @@ export default function RiwayatPage() {
 
   const [submissions, setSubmissions] = useState([])
   const [targetSubmissions, setTargetSubmissions] = useState([])
+  const [targetRevisions, setTargetRevisions] = useState([])
   const [absHist, setAbsHist] = useState({ taruna: { submissions: [], activeCount: 0 }, penyerapan: [] })
   const [filterType, setFilterType] = useState('semua') // 'semua' | 'target' | 'realisasi' | 'taruna' | 'penyerapan'
 
@@ -66,15 +68,17 @@ export default function RiwayatPage() {
     setLoading(true)
     setError('')
     try {
-      const [realRes, subRes, targetHistRes, absHistRes] = await Promise.all([
+      const [realRes, subRes, targetHistRes, absHistRes, revRes] = await Promise.all([
         api.get('/realizations/my', { params: { year } }),
         api.get('/submissions/history').catch(() => ({ data: { submissions: [] } })),
         api.get('/targets/history').catch(() => ({ data: { submissions: [] } })),
         api.get('/absorptions/upt-history', { params: { year } }).catch(() => ({ data: {} })),
+        api.get('/targets/my/revisions', { params: { year } }).catch(() => ({ data: { revisions: [] } })),
       ])
       setData(realRes.data)
       setSubmissions(subRes.data?.submissions || [])
       setTargetSubmissions(targetHistRes.data?.submissions || [])
+      setTargetRevisions(revRes.data?.revisions || [])
       setAbsHist({
         taruna: absHistRes.data?.taruna || { submissions: [], activeCount: 0 },
         penyerapan: absHistRes.data?.penyerapan || [],
@@ -509,12 +513,12 @@ export default function RiwayatPage() {
                 <IconTarget className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-sm font-extrabold text-navy-900">Rekap Target PK {year} (Satu kali input)</p>
-                <p className="text-xs text-navy-400">Riwayat pengajuan Target PK tahunan single-input</p>
+                <p className="text-sm font-extrabold text-navy-900">Rekap Target PK {year} (Input sekali · revisi via unlock)</p>
+                <p className="text-xs text-navy-400">Pengajuan tahunan single-input · berlaku = update terakhir · Awal + revisi terekam di bawah</p>
               </div>
             </div>
             <span className="text-xs font-bold text-navy-500 bg-amber-100 rounded-full px-3 py-1">
-              {targetMonths.length} pengajuan
+              {targetMonths.length} pengajuan · {targetRevisions.length > 1 ? `${targetRevisions.length - 1}× revisi` : 'belum revisi'}
             </span>
           </div>
           {loading ? (
@@ -602,6 +606,21 @@ export default function RiwayatPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {/* Riwayat angka Awal → Revisi (lengkap dengan waktu) */}
+          {!loading && targetRevisions.length > 0 && (
+            <div className="px-4 sm:px-5 py-4 border-t border-amber-100 bg-amber-50/30">
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-amber-800 mb-2">
+                Riwayat angka Target PK {year} — berlaku = update terakhir
+              </p>
+              <div className="rounded-xl bg-white border border-amber-100 p-3">
+                <TargetRevisionHistory revisions={targetRevisions} year={year} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link to="/upt/target-pk" className="text-xs font-bold text-navy-700 hover:underline">Kelola angka di Input Target PK →</Link>
+                <Link to="/upt/perubahan-target" className="text-xs font-bold text-amber-700 hover:underline">Ajukan Perubahan / Unlock →</Link>
+              </div>
             </div>
           )}
         </div>

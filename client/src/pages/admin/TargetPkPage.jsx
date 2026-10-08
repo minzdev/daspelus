@@ -4,7 +4,8 @@ import {
   Modal, EmptyState, SkeletonRows, Alert,
 } from '../../components/ui'
 import { IconTarget, IconEye, IconRefresh, IconLayers, IconSearch } from '../../components/icons'
-import { fmtNum, yearOptions } from '../../utils/format'
+import { fmtDateTime, fmtNum, yearOptions } from '../../utils/format'
+import TargetRevisionHistory from '../../components/TargetRevisionHistory'
 
 /**
  * ADMIN — Pantau Target PK (read-only).
@@ -175,11 +176,15 @@ export default function TargetPkPage() {
                           const rev = t.revision || { count: 0, first: null, last: null }
                           if (!hasTarget || !rev.count) return <span className="text-slate-300">—</span>
                           return (
-                            <div className="text-[11px] leading-relaxed" title={rev.count > 1 ? `${rev.count}× simpan PK` : 'PK awal'}>
-                              <p className="text-slate-600">PK Awal: <strong className="text-slate-900 tabular-nums">{fmtNum(rev.first.total)}</strong></p>
-                              <p className="text-slate-600">PK Revisi: {rev.count > 1
-                                ? <strong className="text-amber-700 tabular-nums">{fmtNum(rev.last.total)}</strong>
-                                : <span className="text-slate-300">—</span>}
+                            <div className="text-[11px] leading-relaxed" title={rev.count > 1 ? `${rev.count}× penyimpanan (klik Lihat untuk riwayat lengkap)` : 'Target awal — klik Lihat'}>
+                              <p className="text-slate-600">
+                                Awal: <strong className="text-slate-900 tabular-nums">{fmtNum(rev.first.total)}</strong>
+                                <span className="text-slate-400"> · {rev.first.at ? fmtDateTime(rev.first.at) : ''}</span>
+                              </p>
+                              <p className="text-slate-600">
+                                Berlaku: {rev.count > 1
+                                  ? <><strong className="text-emerald-700 tabular-nums">{fmtNum(rev.last.total)}</strong><span className="text-slate-400"> · revisi ke-{rev.last.no - 1} · {rev.last.at ? fmtDateTime(rev.last.at) : ''}</span></>
+                                  : <span className="text-slate-300">— (belum revisi)</span>}
                               </p>
                             </div>
                           )
@@ -202,15 +207,24 @@ export default function TargetPkPage() {
         )}
       </div>
 
-      {/* Modal rincian read-only — hierarki induk → turunan → diklat */}
-      <Modal open={!!viewUpt} onClose={() => setViewUpt(null)} title={`Rincian Target — ${viewUpt?.uptCode || ''}`} subtitle={`${viewUpt?.uptName || ''} · Tahun ${year} · satu kali input`} wide>
+      {/* Modal rincian read-only — angka berlaku (terbaru) + riwayat Awal→revisi */}
+      <Modal open={!!viewUpt} onClose={() => setViewUpt(null)} title={`Rincian Target — ${viewUpt?.uptCode || ''}`} subtitle={`${viewUpt?.uptName || ''} · Tahun ${year} · input sekali, revisi via unlock · berlaku = terbaru`} wide>
         {!viewUpt ? null : (viewUpt.items || []).length === 0 ? (
           <EmptyState icon={<IconTarget className="h-6 w-6" />} title="Belum ada target" desc="UPT ini belum mengisi target PK untuk tahun ini." />
         ) : (
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-            {(viewUpt.diklats || []).length > 0 && (
-              <p className="text-xs text-slate-500">{(viewUpt.diklats || []).length} rincian diklat sinkron · induk otomatis = jumlah turunan</p>
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            {(viewUpt.revision?.history?.length > 0) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                <p className="text-[11px] font-extrabold uppercase tracking-widest text-amber-800 mb-2">Riwayat angka (Awal → Revisi) · {viewUpt.revision.count}× tercatat</p>
+                <TargetRevisionHistory revisions={viewUpt.revision.history} year={year} />
+              </div>
             )}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-extrabold uppercase tracking-widest text-slate-500">Angka berlaku (update terakhir)</p>
+              {(viewUpt.diklats || []).length > 0 && (
+                <p className="text-xs text-slate-500">{(viewUpt.diklats || []).length} rincian diklat · induk otomatis = jumlah turunan</p>
+              )}
+            </div>
             {(viewUpt.items || []).map((it) => {
               const rincian = (viewUpt.diklats || []).filter((d) => (d.programIds || []).includes(it.programId))
               return (
