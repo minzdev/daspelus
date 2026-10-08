@@ -870,11 +870,32 @@ export default function UptDiklatPage() {
       {error && <Alert type="error">{error}</Alert>}
 
       {/* Toolbar */}
-      <div className="card rounded-2xl border border-slate-200/60 bg-white p-4 flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-0 md:min-w-[220px]">
-          <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input className="form-input !rounded-xl !pl-9" placeholder="Cari nama diklat... (mis. Pendidikan Karakter)" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+      <div className="card rounded-2xl border border-slate-200/60 bg-white p-4 flex flex-col gap-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-0 md:min-w-[220px]">
+            <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input className="form-input !rounded-xl !pl-9" placeholder="Cari nama diklat... (mis. Pendidikan Karakter)" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="relative min-w-0 md:min-w-[240px]">
+            <select
+              className="form-input !rounded-xl appearance-none !pr-9 font-bold text-slate-700 cursor-pointer"
+              value={filterProg}
+              onChange={(e) => setFilterProg(e.target.value)}
+              title="Filter daftar berdasarkan kategori diklat"
+            >
+              <option value="">Semua Kategori ({diklats.length})</option>
+              {groupedPrograms.map(([parentName, progs]) => (
+                <optgroup key={parentName} label={parentName || 'Program'}>
+                  {progs.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({(diklatByProgram.get(p.id) || []).length})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <IconChevronDown className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
         <button
           className="btn-secondary !rounded-xl whitespace-nowrap"
           onClick={exportToExcel}
@@ -902,6 +923,50 @@ export default function UptDiklatPage() {
           </button>
         )}
         <button className="btn-primary !rounded-xl whitespace-nowrap" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat</button>
+        </div>
+        {/* Filter cepat kategori diklat */}
+        <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 shrink-0">Kategori</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFilterProg('')}
+                className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-all ${!filterProg ? 'bg-navy-900 text-white ring-navy-900 shadow-sm' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'}`}
+              >
+                Semua ({diklats.length})
+              </button>
+              {leafPrograms.map((p) => {
+                const count = (diklatByProgram.get(p.id) || []).length
+                const active = filterProg === p.id
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setFilterProg(active ? '' : p.id)}
+                    title={p.parentName ? `${p.parentName} — ${p.name}` : p.name}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-all ${active ? 'bg-sky-600 text-white ring-sky-600 shadow-sm' : 'bg-white text-slate-600 ring-slate-200 hover:bg-sky-50 hover:text-sky-700 hover:ring-sky-200'}`}
+                  >
+                    {p.name}
+                    <span className={`rounded-full px-1.5 text-[10px] font-black tabular-nums ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          {(filterProg || search.trim()) && (
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <p className="text-slate-500">
+                Menampilkan <strong className="text-slate-900 tabular-nums">{filtered.length}</strong> dari <strong className="text-slate-900 tabular-nums">{diklats.length}</strong> diklat
+                {filterProg && <> · kategori <strong className="text-sky-700">{progName.get(filterProg) || ''}</strong></>}
+                {search.trim() && <> · cari “<strong className="text-slate-800">{search.trim()}</strong>”</>}
+              </p>
+              <button type="button" onClick={() => { setFilterProg(''); setSearch('') }} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 shrink-0">
+                Reset filter
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats ringkas */}
@@ -961,10 +1026,18 @@ export default function UptDiklatPage() {
       {/* Tabel diklat */}
       <div className="card rounded-2xl border border-slate-200/60 overflow-hidden bg-white">
         <div className="px-5 py-4 border-b border-slate-200/60 flex items-center justify-between gap-2.5 bg-gradient-to-b from-white to-slate-50/40 flex-wrap">
-          <div className="flex items-center gap-2.5">
-            <span className="h-8 w-8 rounded-xl bg-navy-900 text-white flex items-center justify-center"><IconLayers className="h-4 w-4" /></span>
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900">Daftar Nama Diklat {year} ({filtered.length})</h3>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="h-8 w-8 shrink-0 rounded-xl bg-navy-900 text-white flex items-center justify-center"><IconLayers className="h-4 w-4" /></span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-extrabold text-slate-900">
+                Daftar Nama Diklat {year} ({filtered.length}{filtered.length !== diklats.length ? `/${diklats.length}` : ''})
+              </h3>
+              {filterProg && (
+                <p className="text-xs text-slate-500 truncate">
+                  Kategori: <strong className="text-sky-700">{progName.get(filterProg) || ''}</strong>
+                  {' · '}<button type="button" className="font-bold text-navy-700 hover:underline" onClick={() => setFilterProg('')}>Tampilkan semua</button>
+                </p>
+              )}
             </div>
           </div>
           {filtered.length > 0 && (
@@ -982,8 +1055,12 @@ export default function UptDiklatPage() {
           <EmptyState
             icon={<IconLayers className="h-6 w-6" />}
             title={diklats.length === 0 ? 'Belum ada diklat' : 'Tidak ada hasil'}
-            desc={diklats.length === 0 ? `Belum ada nama diklat untuk tahun ${year}. Klik Tambah Diklat — contoh: "Pendidikan Karakter" masuk ke program "Pola Pembibitan".` : 'Coba ubah kata kunci / filter program.'}
-            action={diklats.length === 0 ? <button className="btn-primary !rounded-xl" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat Pertama</button> : null}
+            desc={diklats.length === 0 ? `Belum ada nama diklat untuk tahun ${year}. Klik Tambah Diklat — contoh: "Pendidikan Karakter" masuk ke program "Pola Pembibitan".` : `Tidak ada diklat yang cocok${filterProg ? ` di kategori "${progName.get(filterProg) || ''}"` : ''}${search.trim() ? ` dengan kata kunci "${search.trim()}"` : ''}.`}
+            action={diklats.length === 0
+              ? <button className="btn-primary !rounded-xl" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat Pertama</button>
+              : (filterProg || search.trim()
+                ? <button className="btn-secondary !rounded-xl" onClick={() => { setFilterProg(''); setSearch('') }}>Reset filter kategori & pencarian</button>
+                : null)}
           />
         ) : (
           <div className="overflow-x-auto">
