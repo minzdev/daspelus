@@ -175,18 +175,34 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
     }
   }
 
-  // Bila tidak ada target bulanan (single annual), distribusikan target tahunan ke setiap bulan
-  // sehingga kolom "TARGET PK" di laporan bulanan tidak kosong (0).
-  const hasAnyMonthlyTarget = targetDocs.some((t) => Number(t.month) >= 1);
-  if (!hasAnyMonthlyTarget) {
-    for (const [progId, ann] of annualTgtByProg.entries()) {
-      const pMap = monthlyByProg.get(progId);
-      if (!pMap) continue;
-      for (let m = 1; m <= 12; m++) {
-        const e = pMap.get(m);
-        e.targetPeserta = ann.tp;
-        e.targetLulusan = ann.tl;
+  // Target kanonis kini SINGLE-INPUT (month=0, nilai terbaru). Sisa dokumen
+  // bulanan lama (month 1-12, termasuk yang bernilai 0) tidak boleh merusak
+  // tampilan: fallback tahunan dipakai PER-PROGRAM bila program tersebut
+  // tidak punya target bulanan bernilai. Flag global hanya menghitung
+  // dokumen bulanan yang benar-benar bernilai.
+  const hasAnyMonthlyTarget = targetDocs.some(
+    (t) => Number(t.month) >= 1 && ((Number(t.targetPeserta) || 0) + (Number(t.targetLulusan) || 0)) > 0
+  );
+  const progHasMonthlyTarget = new Set();
+  for (const [progId, pMap] of monthlyByProg.entries()) {
+    for (let m = 1; m <= 12; m++) {
+      const e = pMap.get(m);
+      if (((e.targetPeserta || 0) + (e.targetLulusan || 0)) > 0) {
+        progHasMonthlyTarget.add(String(progId));
+        break;
       }
+    }
+  }
+  // Bila program tidak punya target bulanan (single annual), distribusikan
+  // target tahunan ke setiap bulan sehingga kolom "TARGET PK" tidak kosong (0).
+  for (const [progId, ann] of annualTgtByProg.entries()) {
+    if (progHasMonthlyTarget.has(String(progId))) continue;
+    const pMap = monthlyByProg.get(progId);
+    if (!pMap) continue;
+    for (let m = 1; m <= 12; m++) {
+      const e = pMap.get(m);
+      e.targetPeserta = ann.tp;
+      e.targetLulusan = ann.tl;
     }
   }
 
@@ -260,15 +276,20 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
     const t = tgtByProg.get(fp.id) || { tpBulanan: 0, tlBulanan: 0, tpTahunan: 0, tlTahunan: 0 };
     const tpTahunan = t.tpTahunan || t.tpBulanan;
     const tlTahunan = t.tlTahunan || t.tlBulanan;
-    const tpPeriode = (!hasAnyMonthlyTarget && t.tpBulanan === 0) ? tpTahunan : t.tpBulanan;
-    const tlPeriode = (!hasAnyMonthlyTarget && t.tlBulanan === 0) ? tlTahunan : t.tlBulanan;
+    // Acuan periode = target bulanan bila ada; bila kosong pakai tahunan
+    // (single-input month=0 adalah kanonis terbaru). Per-program agar sisa
+    // data bulanan lama tidak membuat baris kategori bernilai 0.
+    let tpPeriode = t.tpBulanan;
+    let tlPeriode = t.tlBulanan;
+    if (tpPeriode === 0 && tpTahunan > 0) tpPeriode = tpTahunan;
+    if (tlPeriode === 0 && tlTahunan > 0) tlPeriode = tlTahunan;
     return {
       programId: fp.id, programName: fp.name, parentId: fp.parentId || null, parentName: fp.parentName || "-", isParent: fp.isParent === true,
       targetGroup: fp.targetGroup || "semua",
       pesertaL: r.pesertaL, pesertaP: r.pesertaP, lulusanL: r.lulusanL, lulusanP: r.lulusanP,
       targetPeserta: tpPeriode, targetPesertaTahunan: tpTahunan,
       targetLulusan: tlPeriode, targetLulusanTahunan: tlTahunan,
-      isSingle: !hasAnyMonthlyTarget,
+      isSingle: !progHasMonthlyTarget.has(String(fp.id)),
       diklatDetails: diklatDetailsByProg.get(String(fp.id)) || [],
     };
   });
