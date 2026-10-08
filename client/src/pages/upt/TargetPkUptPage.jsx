@@ -876,12 +876,11 @@ export default function TargetPkUptPage() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-black text-white tracking-tight">Input Target PK</h1>
+                <h1 className="text-base sm:text-lg font-black text-white tracking-tight">Input Angka Target PK Peserta dan Lulusan</h1>
                 <span className="rounded-full bg-white/10 text-gold-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-white/15">Tahun {year}</span>
-                <span className="rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-emerald-400/20">Satu kali input</span>
               </div>
               <p className="text-xs text-navy-200 mt-0.5">
-                Tetapkan angka Target PK <strong className="text-white">satu kali</strong> per program / diklat — <strong className="text-white">{upt?.code || '—'}</strong> <span className="text-navy-100">{upt?.name || ''}</span>
+                Tetapkan angka target PK peserta dan lulusan <span className="text-navy-100">{upt?.name || upt?.code || ''}</span>
               </p>
             </div>
           </div>
@@ -905,14 +904,12 @@ export default function TargetPkUptPage() {
           <span className="h-9 w-9 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-navy-900 group-hover:text-white flex items-center justify-center font-black text-sm transition-colors">1</span>
           <div className="flex-1">
             <p className="text-sm font-black text-slate-800">Langkah 1: Input Diklat ({diklats.length}) →</p>
-            <p className="text-xs text-slate-500">Daftarkan nama diklat + petakan ke program</p>
           </div>
         </Link>
         <div className="rounded-2xl border-2 border-navy-900 bg-navy-50 p-4 flex items-center gap-3">
           <span className="h-9 w-9 rounded-xl bg-navy-900 text-white flex items-center justify-center font-black text-sm">2</span>
           <div>
-            <p className="text-sm font-black text-navy-900">Input Target PK (saat ini)</p>
-            <p className="text-xs text-slate-500">Isi angka Target PK — satu kali input per tahun</p>
+            <p className="text-sm font-black text-navy-900">Input Angka Target PK Peserta dan Lulusan (saat ini)</p>
           </div>
         </div>
       </div>
@@ -947,7 +944,7 @@ export default function TargetPkUptPage() {
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">Total Target PK {year}</p>
               <p className="mt-2 text-[26px] font-black tabular-nums leading-none"><span className="text-sky-300">{fmtNum(previewTotals.p)}</span> <span className="text-slate-400 text-lg">/</span> <span className="text-gold-300">{fmtNum(previewTotals.l)}</span></p>
-              <p className="text-xs text-slate-300 mt-1">Peserta / Lulusan · satu kali input</p>
+              <p className="text-xs text-slate-300 mt-1">Peserta / Lulusan</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
               <IconTarget className="h-6 w-6 text-gold-300" />
@@ -959,9 +956,9 @@ export default function TargetPkUptPage() {
           <div className="absolute inset-x-0 top-0 h-1 bg-navy-600" />
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Program Terdata</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</p>
               <p className="mt-2 text-[32px] font-black text-slate-900 tabular-nums">{totalProgramsCount}</p>
-              <p className="text-xs text-slate-500 mt-1">Dari {leafPrograms.length} program turunan</p>
+              <p className="text-xs text-slate-500 mt-1">Dari {leafPrograms.length} diklat</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-navy-50 text-navy-800 flex items-center justify-center">
               <IconLayers className="h-6 w-6" />
@@ -973,7 +970,7 @@ export default function TargetPkUptPage() {
           <div className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Diklat Terdata</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Nama Diklat Terdata</p>
               <p className="mt-2 text-[32px] font-black text-slate-900 tabular-nums">{diklats.length}</p>
               <p className="text-xs text-slate-500 mt-1">Rincian nama diklat tahun {year}</p>
             </div>
@@ -1095,7 +1092,7 @@ export default function TargetPkUptPage() {
             <table className="w-full text-sm" style={{ minWidth: 640 }}>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/60">
-                  <th className="text-left px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Program / Rincian Diklat</th>
+                  <th className="text-left px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</th>
                   <th className="text-right px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700 w-32">Target Peserta</th>
                   <th className="text-right px-6 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700 w-32">Target Lulusan</th>
                 </tr>
