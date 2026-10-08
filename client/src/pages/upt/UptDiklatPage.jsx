@@ -508,7 +508,7 @@ export default function UptDiklatPage() {
 
       // Table Header
       const headerRow = ws.getRow(4)
-      headerRow.values = ['NO', 'NAMA DIKLAT', 'PROGRAM TERKAIT', 'TARGET PESERTA', 'TARGET LULUSAN', 'TOTAL TARGET']
+      headerRow.values = ['NO', 'NAMA DIKLAT', 'KATEGORI DIKLAT', 'TARGET PESERTA', 'TARGET LULUSAN', 'TOTAL TARGET']
       headerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
       headerRow.height = 24
       headerRow.eachCell((c) => {
@@ -830,10 +830,9 @@ export default function UptDiklatPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base sm:text-lg font-black text-white tracking-tight">Input Diklat</h1>
                 <span className="rounded-full bg-white/10 text-gold-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-white/15">Tahun {year}</span>
-                <span className="rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-extrabold px-2.5 py-0.5 border border-emerald-400/20">Langkah 1 dari 2</span>
               </div>
               <p className="text-xs text-navy-200 mt-0.5">
-                Input <strong className="text-white">nama-nama diklat</strong> UPT Anda, petakan ke <strong className="text-white">1 atau lebih program</strong> — <strong className="text-white">{upt?.code || '—'}</strong> <span className="text-navy-100">{upt?.name || ''}</span>
+                Input <strong className="text-white">nama-nama diklat</strong> <strong className="text-white">{upt?.code || '—'}</strong> <span className="text-navy-100">{upt?.name || ''}</span>
               </p>
             </div>
           </div>
@@ -857,14 +856,12 @@ export default function UptDiklatPage() {
           <span className="h-9 w-9 rounded-xl bg-navy-900 text-white flex items-center justify-center font-black text-sm">1</span>
           <div>
             <p className="text-sm font-black text-navy-900">Input Diklat (saat ini)</p>
-            <p className="text-xs text-slate-500">Daftarkan nama diklat + pilih programnya</p>
           </div>
         </div>
         <Link to="/upt/target-pk" className="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3 hover:border-navy-300 hover:shadow-sm transition-all group">
           <span className="h-9 w-9 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center font-black text-sm transition-colors">2</span>
           <div className="flex-1">
             <p className="text-sm font-black text-slate-800">Input Angka Target →</p>
-            <p className="text-xs text-slate-500">Isi peserta & lulusan per diklat / program</p>
           </div>
           <IconTarget className="h-5 w-5 text-slate-300 group-hover:text-amber-500" />
         </Link>
@@ -873,12 +870,12 @@ export default function UptDiklatPage() {
       {error && <Alert type="error">{error}</Alert>}
 
       {/* Toolbar */}
-      <div className="card rounded-2xl border border-slate-200/60 bg-white p-4 flex flex-col md:flex-row md:items-center gap-3">
-        <div className="relative flex-1 min-w-0">
-          <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="card rounded-2xl border border-slate-200/60 bg-white p-4 flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-0 md:min-w-[220px]">
+          <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input className="form-input !rounded-xl !pl-9" placeholder="Cari nama diklat... (mis. Pendidikan Karakter)" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="form-input !rounded-xl md:max-w-[260px]" value={filterProg} onChange={(e) => setFilterProg(e.target.value)}>
+        <select className="form-input !rounded-xl md:max-w-[260px] shrink-0" value={filterProg} onChange={(e) => setFilterProg(e.target.value)}>
           <option value="">Semua Program</option>
           {leafPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -914,14 +911,13 @@ export default function UptDiklatPage() {
       {/* Stats ringkas */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="card p-5 rounded-2xl border border-slate-200/60">
-          <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Total Diklat {year}</p>
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Total Nama Diklat {year}</p>
           <p className="mt-1 text-[28px] font-black tabular-nums">{fmtNum(diklats.length)}</p>
           <p className="text-xs text-slate-500">Terdaftar oleh UPT Anda</p>
         </div>
         <div className="card p-5 rounded-2xl border border-slate-200/60">
-          <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Program Terpetakan</p>
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</p>
           <p className="mt-1 text-[28px] font-black tabular-nums">{diklatByProgram.size} <span className="text-sm font-bold text-slate-400">/ {leafPrograms.length}</span></p>
-          <p className="text-xs text-slate-500">Program yang sudah punya rincian</p>
         </div>
         <div className="card p-5 rounded-2xl border border-slate-200/60 bg-gradient-to-br from-navy-950 to-navy-900 text-white border-navy-800">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">Langkah Berikutnya</p>
@@ -971,8 +967,7 @@ export default function UptDiklatPage() {
           <div className="flex items-center gap-2.5">
             <span className="h-8 w-8 rounded-xl bg-navy-900 text-white flex items-center justify-center"><IconLayers className="h-4 w-4" /></span>
             <div>
-              <h3 className="text-sm font-extrabold text-slate-900">Daftar Diklat {year} ({filtered.length})</h3>
-              <p className="text-xs text-slate-500">Tandai satu atau beberapa diklat untuk dihapus massal</p>
+              <h3 className="text-sm font-extrabold text-slate-900">Daftar Nama Diklat {year} ({filtered.length})</h3>
             </div>
           </div>
           {filtered.length > 0 && (
@@ -995,7 +990,7 @@ export default function UptDiklatPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: 720 }}>
+            <table className="w-full text-sm" style={{ minWidth: 800 }}>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/60">
                   <th className="w-12 px-4 py-3.5 text-center">
@@ -1009,8 +1004,9 @@ export default function UptDiklatPage() {
                     />
                   </th>
                   <th className="text-left px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Nama Diklat</th>
-                  <th className="text-left px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Masuk Program</th>
-                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Target</th>
+                  <th className="text-left px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Kategori Diklat</th>
+                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-700">Target Peserta</th>
+                  <th className="text-right px-3 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">Target Lulusan</th>
                   <th className="text-right px-5 py-3.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Aksi</th>
                 </tr>
               </thead>
@@ -1039,7 +1035,8 @@ export default function UptDiklatPage() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-3 py-4 text-right font-bold tabular-nums">{fmtNum((d.targetPeserta || 0) + (d.targetLulusan || 0))}</td>
+                      <td className="px-3 py-4 text-right font-bold tabular-nums text-sky-800">{fmtNum(d.targetPeserta || 0)}</td>
+                      <td className="px-3 py-4 text-right font-bold tabular-nums text-emerald-800">{fmtNum(d.targetLulusan || 0)}</td>
                       <td className="px-5 py-4 text-right whitespace-nowrap">
                         <button className="btn-secondary btn-sm !rounded-xl mr-1.5" onClick={() => openEdit(d)}><IconEdit className="h-3.5 w-3.5" /> Edit</button>
                         <button className="btn-secondary btn-sm !rounded-xl !text-red-600 hover:!bg-red-50" onClick={() => setDeleteTarget(d)}><IconTrash className="h-3.5 w-3.5" /></button>
@@ -1061,7 +1058,7 @@ export default function UptDiklatPage() {
             <input className="form-input !rounded-xl" placeholder="mis. Pendidikan Karakter" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </FormField>
           <div>
-            <p className="form-label">Masuk ke Program <span className="text-red-500">*</span> <span className="ml-1 font-medium text-slate-400 normal-case">(boleh pilih lebih dari satu)</span></p>
+            <p className="form-label">Masuk ke Kategori Diklat <span className="text-red-500">*</span> <span className="ml-1 font-medium text-slate-400 normal-case">(boleh pilih lebih dari satu)</span></p>
             <p className="text-xs text-slate-500 mb-2">Contoh: <strong>Pendidikan Karakter</strong> masuk ke program <strong>Pola Pembibitan</strong>. Centang semua program yang relevan.</p>
             {groupedPrograms.length === 0 ? (
               <Alert type="warning">Belum ada program aktif. Hubungi admin.</Alert>
