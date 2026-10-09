@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api, { apiError } from '../../lib/api'
@@ -107,7 +107,16 @@ export default function AdminApprovalHubPage() {
     notePlaceholder: '',
     onConfirm: null,
   })
-  const [noteInput, setNoteInput] = useState('')
+  const [noteInput, setNoteInputState] = useState('')
+  // Ref cermin noteInput: handler onConfirm yang disimpan di confirmState
+  // adalah closure lama — tanpa ref, ia selalu membaca nilai saat dialog
+  // dibuka (kosong) sehingga penolakan selalu gagal walau alasan sudah diisi.
+  const noteInputRef = useRef('')
+  const setNoteInput = (v) => {
+    const next = typeof v === 'function' ? v(noteInputRef.current) : v
+    noteInputRef.current = next
+    setNoteInputState(next)
+  }
 
   // Data Fetching
   const loadAll = useCallback(async () => {
@@ -577,7 +586,7 @@ export default function AdminApprovalHubPage() {
         onConfirm: async () => {
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/absorptions/taruna-submissions/${item.rawId}/approve-admin`, { notes: noteInput })
+            const { data } = await api.patch(`/absorptions/taruna-submissions/${item.rawId}/approve-admin`, { notes: noteInputRef.current })
             toast.success('Data Taruna Disahkan', data.message)
             await loadAll()
             setTarunaModalOpen(false)
@@ -604,7 +613,7 @@ export default function AdminApprovalHubPage() {
             const { data } = await api.post('/absorptions/admin/review', {
               submissionId: item.rawId,
               action: 'approve',
-              notes: noteInput,
+              notes: noteInputRef.current,
             })
             toast.success('Laporan Penyerapan Disahkan', data.message)
             await loadAll()
@@ -628,7 +637,7 @@ export default function AdminApprovalHubPage() {
         onConfirm: async () => {
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/unlock-requests/${item.rawId}/decision`, { decision: 'approve', note: noteInput })
+            const { data } = await api.patch(`/unlock-requests/${item.rawId}/decision`, { decision: 'approve', note: noteInputRef.current })
             toast.success('Data Berhasil Terbuka', data.message || 'Data UPT telah terbuka kembali')
             await loadAll()
           } catch (err) {
@@ -654,13 +663,13 @@ export default function AdminApprovalHubPage() {
         noteLabel: 'Alasan Penolakan:',
         notePlaceholder: 'Tuliskan alasan penolakan dan instruksi perbaikan...',
         onConfirm: async () => {
-          if (!noteInput.trim()) {
+          if (!noteInputRef.current.trim()) {
             toast.error('Alasan penolakan wajib diisi')
             return false
           }
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/targets/submissions/${item.rawId}/reject-bpsdmp`, { note: noteInput })
+            const { data } = await api.patch(`/targets/submissions/${item.rawId}/reject-bpsdmp`, { note: noteInputRef.current })
             toast.success('Target PK Ditolak', data.message)
             await loadAll()
             setTargetModalOpen(false)
@@ -682,13 +691,13 @@ export default function AdminApprovalHubPage() {
         noteLabel: 'Alasan Penolakan:',
         notePlaceholder: 'Tuliskan alasan penolakan laporan...',
         onConfirm: async () => {
-          if (!noteInput.trim()) {
+          if (!noteInputRef.current.trim()) {
             toast.error('Alasan penolakan wajib diisi')
             return false
           }
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/submissions/${item.rawId}/reject`, { note: noteInput })
+            const { data } = await api.patch(`/submissions/${item.rawId}/reject`, { note: noteInputRef.current })
             toast.success('Laporan Ditolak', data.message)
             await loadAll()
             setRealisasiModalOpen(false)
@@ -710,13 +719,13 @@ export default function AdminApprovalHubPage() {
         noteLabel: 'Alasan Penolakan:',
         notePlaceholder: 'Tuliskan catatan perbaikan data taruna...',
         onConfirm: async () => {
-          if (!noteInput.trim()) {
+          if (!noteInputRef.current.trim()) {
             toast.error('Alasan penolakan wajib diisi')
             return false
           }
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/absorptions/taruna-submissions/${item.rawId}/reject-admin`, { notes: noteInput })
+            const { data } = await api.patch(`/absorptions/taruna-submissions/${item.rawId}/reject-admin`, { notes: noteInputRef.current })
             toast.success('Data Taruna Ditolak', data.message)
             await loadAll()
             setTarunaModalOpen(false)
@@ -738,7 +747,7 @@ export default function AdminApprovalHubPage() {
         noteLabel: 'Alasan Penolakan:',
         notePlaceholder: 'Tuliskan alasan penolakan penyerapan...',
         onConfirm: async () => {
-          if (!noteInput.trim()) {
+          if (!noteInputRef.current.trim()) {
             toast.error('Alasan penolakan wajib diisi')
             return false
           }
@@ -747,7 +756,7 @@ export default function AdminApprovalHubPage() {
             const { data } = await api.post('/absorptions/admin/review', {
               submissionId: item.rawId,
               action: 'reject',
-              notes: noteInput,
+              notes: noteInputRef.current,
             })
             toast.success('Laporan Penyerapan Ditolak', data.message)
             await loadAll()
@@ -769,13 +778,13 @@ export default function AdminApprovalHubPage() {
         noteLabel: 'Alasan Penolakan:',
         notePlaceholder: 'Tuliskan alasan penolakan...',
         onConfirm: async () => {
-          if (!noteInput.trim()) {
+          if (!noteInputRef.current.trim()) {
             toast.error('Alasan penolakan wajib diisi')
             return false
           }
           setActing(item.id)
           try {
-            const { data } = await api.patch(`/unlock-requests/${item.rawId}/decision`, { decision: 'reject', note: noteInput })
+            const { data } = await api.patch(`/unlock-requests/${item.rawId}/decision`, { decision: 'reject', note: noteInputRef.current })
             toast.success('Permohonan Ditolak', data.message || 'Permohonan berhasil ditolak')
             await loadAll()
           } catch (err) {
