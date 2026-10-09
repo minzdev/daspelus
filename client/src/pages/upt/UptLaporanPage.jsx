@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import api, { apiError } from '../../lib/api'
 import { StatCard, EmptyState, SkeletonRows, Alert } from '../../components/ui'
 import {
-  IconFileText, IconDownload, IconTarget, IconPeople, IconGraduation, IconChevronDown,
+  IconFileText, IconDownload, IconTarget, IconPeople, IconGraduation, IconChevronDown, IconSearch,
 } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
 import { MONTHS, yearOptions, fmtNum } from '../../utils/format'
@@ -148,9 +148,9 @@ async function exportExcel(upt, { periodLabel, year, periodMode, activeMonths, m
       currentRow++
 
       // Rincian diklat (sinkron dengan tampilan web)
-      for (const d of p.diklatDetails || []) {
+      for (const [di, d] of (p.diklatDetails || []).entries()) {
         const dRow = worksheet.addRow([
-          '', `  • ${d.name}`,
+          '', `  ${di + 1}) ${d.name}`,
           d.targetPeserta || 0, d.targetPeserta || 0, d.pesertaL || 0, d.pesertaP || 0,
           { formula: `=SUM(E${currentRow}:F${currentRow})` },
           { formula: `=IF(C${currentRow}>0, G${currentRow}/C${currentRow}, 0)` },
@@ -397,8 +397,8 @@ async function exportExcel(upt, { periodLabel, year, periodMode, activeMonths, m
       currentRow++
 
       // Rincian diklat (sinkron dengan tampilan web)
-      for (const d of p.diklatDetails || []) {
-        const dRowVals = ['', `  • ${d.name}`]
+      for (const [di, d] of (p.diklatDetails || []).entries()) {
+        const dRowVals = ['', `  ${di + 1}) ${d.name}`]
         activeMonths.forEach((mNum, mIdx) => {
           const bm = d.byMonth?.[mNum] || { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0 }
           const colL = getColLetter(2 + mIdx * 10 + 2)
@@ -572,12 +572,12 @@ function exportPdf(upt, { periodLabel, year, periodMode, monthFrom, monthTo, sin
       { content: pctText(p.lulusanL + p.lulusanP, p.targetLulusan), styles: { halign: 'center', fontStyle: 'bold' } },
       { content: pctText(p.lulusanL + p.lulusanP, p.targetLulusanTahunan || p.targetLulusan), styles: { halign: 'center', fontStyle: 'bold' } },
     ]]
-    for (const d of p.diklatDetails || []) {
+    for (const [di, d] of (p.diklatDetails || []).entries()) {
       const dpTot = (d.pesertaL || 0) + (d.pesertaP || 0)
       const dlTot = (d.lulusanL || 0) + (d.lulusanP || 0)
       rows.push([
         { content: '', styles: { halign: 'center' } },
-        { content: `      • ${d.name}`, styles: { halign: 'left' } },
+        { content: `      ${di + 1}) ${d.name}`, styles: { halign: 'left' } },
         { content: fmtNum(d.targetPeserta), styles: { halign: 'center' } },
         { content: fmtNum(d.targetPeserta), styles: { halign: 'center' } },
         { content: fmtNum(d.pesertaL), styles: { halign: 'center' } },
@@ -694,6 +694,7 @@ export default function UptLaporanPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
   const [exportingExcel, setExportingExcel] = useState(false)
   const matrixScrollRef = useRef(null)
   // Lebar 1 blok bulan = 8 kolom @58px + 2 kolom % @64px = 592
@@ -740,11 +741,12 @@ export default function UptLaporanPage() {
     ? Array.from({ length: Math.max(1, monthTo - monthFrom + 1) }, (_, i) => monthFrom + i)
     : Array.from({ length: 12 }, (_, i) => i + 1)
 
-  const periodBadge = periodMode === 'all'
-    ? `Laporan Realisasi Peserta dan Lulusan 1 Tahun ${year}`
+  // Judul dinamis mengikuti filter periode yang dipilih
+  const reportTitle = periodMode === 'all'
+    ? `Laporan Realisasi Peserta dan Lulusan Tahun ${year}`
     : periodMode === 'range'
-    ? `🗓️ Rentang ${MONTHS[monthFrom - 1]} - ${MONTHS[monthTo - 1]} ${year}`
-    : `📅 Bulan ${MONTHS[singleMonth - 1]} ${year}`
+    ? `Laporan Realisasi Peserta dan Lulusan Bulan ${MONTHS[monthFrom - 1].slice(0, 3)}–${MONTHS[monthTo - 1].slice(0, 3)} ${year}`
+    : `Laporan Realisasi Peserta dan Lulusan Bulan ${MONTHS[singleMonth - 1]} ${year}`
 
   const periodFileLabel = periodMode === 'all'
     ? `Full_1_Tahun_${year}`
@@ -789,6 +791,23 @@ export default function UptLaporanPage() {
   const targetLulusanPeriode = upt?.totalTargetLulusan ?? 0
   const targetLulusanTahunan = upt?.totalTargetLulusanTahunan ?? targetLulusanPeriode
 
+  // Cari/filter kategori & nama diklat (program yang cocok tampil penuh,
+  // yang tidak cocok tapi punya diklat cocok tampil dengan diklat tersaring)
+  const visiblePrograms = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const list = upt?.programs || []
+    if (!q) return list
+    return list
+      .map((p) => {
+        const progMatch = String(p.programName || '').toLowerCase().includes(q)
+        if (progMatch) return p
+        const det = (p.diklatDetails || []).filter((d) => String(d.name || '').toLowerCase().includes(q))
+        if (det.length) return { ...p, diklatDetails: det }
+        return null
+      })
+      .filter(Boolean)
+  }, [upt, search])
+
   const statPeriodLabel = periodMode === 'all'
     ? 'Thn'
     : periodMode === 'range'
@@ -808,11 +827,8 @@ export default function UptLaporanPage() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  Laporan Realisasi PK
+                  {reportTitle}
                 </h1>
-                <span className="rounded-full text-[10px] font-extrabold px-2.5 py-0.5 border bg-gold-500/20 text-gold-300 border-gold-500/30">
-                  {periodBadge}
-                </span>
               </div>
               <p className="text-xs text-navy-200 mt-0.5 max-w-xl">
                 <strong className="text-white">{user?.upt?.name || 'UPT'}</strong> — Rekapitulasi target &amp; capaian realisasi bulanan.
@@ -1007,6 +1023,31 @@ export default function UptLaporanPage() {
         />
       </div>
 
+      {/* Cari / filter kategori & nama diklat */}
+      {!loading && !error && (upt?.programs?.length > 0) && (
+        <div className="card rounded-2xl border border-slate-200/60 bg-white px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
+          <div className="relative flex-1 min-w-0">
+            <IconSearch className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              className="form-input !rounded-xl !pl-9"
+              placeholder="Cari kategori / nama diklat... (mis. Pola Pembibitan, Airfield)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <p className="text-xs text-slate-500 whitespace-nowrap">
+            {search.trim()
+              ? <>Menampilkan <strong className="text-slate-900 tabular-nums">{visiblePrograms.length}</strong> dari <strong className="text-slate-900 tabular-nums">{upt.programs.length}</strong> kategori</>
+              : <><strong className="text-slate-900 tabular-nums">{upt.programs.length}</strong> kategori · <strong className="text-slate-900 tabular-nums">{(upt.diklats || []).length || upt.programs.reduce((s, p) => s + (p.diklatDetails || []).length, 0)}</strong> diklat</>}
+          </p>
+          {search.trim() && (
+            <button type="button" onClick={() => setSearch('')} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 shrink-0">
+              Reset
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tabel Laporan — Matrix (Scroll Menyamping) jika Semua Bulan atau Range, atau Fit Single-Month */}
       <div className="card overflow-hidden border border-slate-300 shadow-card">
         {loading ? (
@@ -1075,7 +1116,17 @@ export default function UptLaporanPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {upt.programs.map((p, i) => {
+                  {visiblePrograms.length === 0 && (
+                    <tr>
+                      <td colSpan={16} className="text-center px-4 py-8">
+                        <p className="text-sm font-bold text-slate-700">Tidak ada hasil untuk “{search.trim()}”</p>
+                        <button type="button" onClick={() => setSearch('')} className="mt-2 inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                          Tampilkan semua
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                  {visiblePrograms.map((p, i) => {
                     const isParentRow = p.isParent
                     const tpBln = p.targetPeserta || 0
                     const tpThn = p.targetPesertaTahunan || tpBln
@@ -1145,15 +1196,15 @@ export default function UptLaporanPage() {
                         </td>
                       </tr>
                       {/* Rincian diklat di bawah program turunan */}
-                      {diklatRows.map((d) => {
+                      {diklatRows.map((d, di) => {
                         const dpTot = (d.pesertaL || 0) + (d.pesertaP || 0)
                         const dlTot = (d.lulusanL || 0) + (d.lulusanP || 0)
                         return (
                           <tr key={d.diklatId} className="bg-sky-50/40 hover:bg-sky-50/70">
                             <td className="border border-slate-300" />
                             <td className="border border-slate-300 px-2 py-1">
-                              <span className="inline-flex items-center gap-1 text-slate-600 text-[10px] font-semibold pl-5 leading-tight">
-                                <span className="text-sky-400 font-black">•</span>{d.name}
+                              <span className="inline-flex items-start gap-1 text-slate-600 text-[10px] font-semibold pl-5 leading-snug">
+                                <span className="text-sky-700 font-black shrink-0 tabular-nums">{di + 1})</span><span className="break-words">{d.name}</span>
                               </span>
                             </td>
                             <td className="text-center border border-slate-300 px-1 py-1 tabular-nums text-[10px] text-slate-500">{fmtNum(d.targetPeserta)}</td>
@@ -1307,7 +1358,17 @@ export default function UptLaporanPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {upt.programs.map((p, i) => {
+                  {visiblePrograms.length === 0 && (
+                    <tr>
+                      <td colSpan={(activeMonths.length + 1) * 10 + 2} className="text-center px-4 py-8">
+                        <p className="text-sm font-bold text-slate-700">Tidak ada hasil untuk “{search.trim()}”</p>
+                        <button type="button" onClick={() => setSearch('')} className="mt-2 inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                          Tampilkan semua
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                  {visiblePrograms.map((p, i) => {
                     const isParentRow = p.isParent
                     const stickyBgClass = isParentRow ? 'bg-slate-200' : i % 2 === 0 ? 'bg-white' : 'bg-slate-100'
 
@@ -1407,7 +1468,7 @@ export default function UptLaporanPage() {
                         </React.Fragment>
                       </tr>
                       {/* Rincian diklat di bawah program turunan */}
-                      {diklatRows.map((d) => {
+                      {diklatRows.map((d, di) => {
                         const dRange = { pesertaL: 0, pesertaP: 0, lulusanL: 0, lulusanP: 0 }
                         for (const mNum of activeMonths) {
                           const bm = d.byMonth?.[mNum] || {}
@@ -1421,7 +1482,7 @@ export default function UptLaporanPage() {
                             <td className="border border-slate-300 sticky z-20 bg-sky-50/80" style={{ left: 0, width: 42, minWidth: 42, maxWidth: 42 }} />
                             <td className="border border-slate-300 border-r-2 border-r-slate-400 px-2 py-1 sticky z-20 bg-sky-50/80 cell-program" style={{ left: 42, width: 240, minWidth: 240, maxWidth: 240 }}>
                               <span className="inline-flex items-start gap-1 text-slate-600 text-[9px] font-semibold pl-4 leading-snug">
-                                <span className="text-sky-400 font-black shrink-0">•</span><span className="break-words">{d.name}</span>
+                                <span className="text-sky-700 font-black shrink-0 tabular-nums">{di + 1})</span><span className="break-words">{d.name}</span>
                               </span>
                             </td>
                             {activeMonths.map((mNum) => {
