@@ -84,15 +84,6 @@ export default function UptDiklatPage() {
     return [...map.entries()]
   }, [leafPrograms])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return diklats.filter((d) => {
-      if (filterProg && !(d.programIds || []).includes(filterProg)) return false
-      if (q && !String(d.name || '').toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [diklats, search, filterProg])
-
   const diklatByProgram = useMemo(() => {
     const m = new Map()
     for (const d of diklats) {
@@ -103,6 +94,52 @@ export default function UptDiklatPage() {
     }
     return m
   }, [diklats])
+
+  // Kelompok induk untuk filter: tiap induk bisa dipilih untuk menampilkan
+  // semua diklat di bawahnya (turunan + induk itu sendiri bila terpetakan).
+  const parentFilterGroups = useMemo(() => {
+    const progById = new Map(programs.map((p) => [String(p.id), p]))
+    const byParent = new Map()
+    for (const p of leafPrograms) {
+      if (!p.parentId) continue
+      const pid = String(p.parentId)
+      if (!byParent.has(pid)) {
+        const parent = progById.get(pid)
+        byParent.set(pid, { id: p.parentId, name: parent?.name || p.parentName || 'Induk', childIds: [] })
+      }
+      byParent.get(pid).childIds.push(p.id)
+    }
+    return [...byParent.values()]
+  }, [leafPrograms, programs])
+
+  // Program akar tanpa induk: tetap opsi satuan di dropdown
+  const rootPrograms = useMemo(() => leafPrograms.filter((p) => !p.parentId), [leafPrograms])
+
+  // Filter aktif: "parent:<id>" = seluruh grup induk, selain itu satu program
+  const activeFilter = useMemo(() => {
+    if (!filterProg) return null
+    if (filterProg.startsWith('parent:')) {
+      const pid = filterProg.slice('parent:'.length)
+      const g = parentFilterGroups.find((x) => String(x.id) === pid)
+      if (!g) return null
+      return { label: g.name, programIds: new Set([String(g.id), ...g.childIds.map((id) => String(id))]) }
+    }
+    return { label: progName.get(filterProg) || '', programIds: new Set([String(filterProg)]) }
+  }, [filterProg, parentFilterGroups, progName])
+
+  const groupDiklatCount = (ids) => {
+    const set = new Set(ids.map((id) => String(id)))
+    return diklats.filter((d) => (d.programIds || []).some((pid) => set.has(String(pid)))).length
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return diklats.filter((d) => {
+      if (activeFilter && !(d.programIds || []).some((pid) => activeFilter.programIds.has(String(pid)))) return false
+      if (q && !String(d.name || '').toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [diklats, search, activeFilter])
 
   function openAdd() {
     setEditing(null)
@@ -883,15 +920,30 @@ export default function UptDiklatPage() {
             title="Filter daftar berdasarkan kategori diklat"
           >
             <option value="">Semua Kategori ({diklats.length})</option>
-            {groupedPrograms.map(([parentName, progs]) => (
-              <optgroup key={parentName} label={parentName || 'Program'}>
-                {progs.map((p) => (
+            {parentFilterGroups.map((g) => {
+              const kids = leafPrograms.filter((p) => String(p.parentId) === String(g.id))
+              return (
+                <optgroup key={g.id} label={g.name}>
+                  <option value={`parent:${g.id}`}>
+                    Semua {g.name} ({groupDiklatCount([g.id, ...g.childIds])})
+                  </option>
+                  {kids.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      ↳ {p.name} ({(diklatByProgram.get(p.id) || []).length})
+                    </option>
+                  ))}
+                </optgroup>
+              )
+            })}
+            {rootPrograms.length > 0 && (
+              <optgroup label="Program Lainnya">
+                {rootPrograms.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({(diklatByProgram.get(p.id) || []).length})
                   </option>
                 ))}
               </optgroup>
-            ))}
+            )}
           </select>
           <IconChevronDown className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
@@ -989,7 +1041,7 @@ export default function UptDiklatPage() {
               </h3>
               {filterProg && (
                 <p className="text-xs text-slate-500 truncate">
-                  Kategori: <strong className="text-sky-700">{progName.get(filterProg) || ''}</strong>
+                  Kategori: <strong className="text-sky-700">{activeFilter?.label || ''}</strong>
                   {' · '}<button type="button" className="font-bold text-navy-700 hover:underline" onClick={() => setFilterProg('')}>Tampilkan semua</button>
                 </p>
               )}
@@ -1010,7 +1062,7 @@ export default function UptDiklatPage() {
           <EmptyState
             icon={<IconLayers className="h-6 w-6" />}
             title={diklats.length === 0 ? 'Belum ada diklat' : 'Tidak ada hasil'}
-            desc={diklats.length === 0 ? `Belum ada nama diklat untuk tahun ${year}. Klik Tambah Diklat — contoh: "Pendidikan Karakter" masuk ke program "Pola Pembibitan".` : `Tidak ada diklat yang cocok${filterProg ? ` di kategori "${progName.get(filterProg) || ''}"` : ''}${search.trim() ? ` dengan kata kunci "${search.trim()}"` : ''}.`}
+            desc={diklats.length === 0 ? `Belum ada nama diklat untuk tahun ${year}. Klik Tambah Diklat — contoh: "Pendidikan Karakter" masuk ke program "Pola Pembibitan".` : `Tidak ada diklat yang cocok${filterProg ? ` di kategori "${activeFilter?.label || ''}"` : ''}${search.trim() ? ` dengan kata kunci "${search.trim()}"` : ''}.`}
             action={diklats.length === 0
               ? <button className="btn-primary !rounded-xl" onClick={openAdd}><IconPlus className="h-4 w-4" /> Tambah Diklat Pertama</button>
               : (filterProg || search.trim()
