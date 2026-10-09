@@ -346,6 +346,8 @@
   }
   .matrix-table td.cell-program {
     white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
     font-size: 10px !important;
     line-height: 1.4 !important;
   }

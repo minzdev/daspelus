@@ -65,7 +65,7 @@ async function exportExcel(upt, { periodLabel, year, periodMode, activeMonths, m
 
   // Jika Single Month
   if (periodMode === 'single') {
-    const row6 = ['#', 'PROGRAM DIKLAT', 'PESERTA', '', '', '', '', '', '', 'LULUSAN', '', '', '', '', '', '']
+    const row6 = ['No', 'KATEGORI DIKLAT', 'PESERTA', '', '', '', '', '', '', 'LULUSAN', '', '', '', '', '', '']
     const row7 = ['', '', 'TARGET PK', '', 'REALISASI', '', '', 'CAPAIAN (%)', '', 'TARGET PK', '', 'REALISASI', '', '', 'CAPAIAN (%)', '']
     const row8 = ['', '', 'BULANAN', 'TAHUNAN', 'L', 'P', 'TOTAL', 'BULAN %', 'TAHUN %', 'BULANAN', 'TAHUNAN', 'L', 'P', 'TOTAL', 'BULAN %', 'TAHUN %']
 
@@ -225,7 +225,7 @@ async function exportExcel(upt, { periodLabel, year, periodMode, activeMonths, m
   } else {
     // Matrix Mode (All Months atau Range)
     const totalBlocks = activeMonths.length + 1
-    const row6Values = ['#', 'PROGRAM DIKLAT']
+    const row6Values = ['No', 'KATEGORI DIKLAT']
     const row7Values = ['', '']
     const row8Values = ['', '']
     const row9Values = ['', '']
@@ -602,8 +602,8 @@ function exportPdf(upt, { periodLabel, year, periodMode, monthFrom, monthTo, sin
     margin: { left: margin, right: margin, bottom: 60 },
     head: [
       [
-        { content: 'NO', rowSpan: 3, styles: { halign: 'center', valign: 'middle' } },
-        { content: 'PROGRAM DIKLAT', rowSpan: 3, styles: { halign: 'left', valign: 'middle' } },
+        { content: 'No', rowSpan: 3, styles: { halign: 'center', valign: 'middle' } },
+        { content: 'KATEGORI DIKLAT', rowSpan: 3, styles: { halign: 'left', valign: 'middle' } },
         { content: 'PESERTA', colSpan: 7, styles: { halign: 'center' } },
         { content: 'LULUSAN', colSpan: 7, styles: { halign: 'center' } },
       ],
@@ -741,7 +741,7 @@ export default function UptLaporanPage() {
     : Array.from({ length: 12 }, (_, i) => i + 1)
 
   const periodBadge = periodMode === 'all'
-    ? `📊 Rekap Full 1 Tahun ${year}`
+    ? `Laporan Realisasi Peserta dan Lulusan 1 Tahun ${year}`
     : periodMode === 'range'
     ? `🗓️ Rentang ${MONTHS[monthFrom - 1]} - ${MONTHS[monthTo - 1]} ${year}`
     : `📅 Bulan ${MONTHS[singleMonth - 1]} ${year}`
@@ -1044,8 +1044,8 @@ export default function UptLaporanPage() {
                 </colgroup>
                 <thead>
                   <tr className="bg-navy-950 text-white font-black uppercase text-[10px]">
-                    <th rowSpan={3} className="text-center border border-slate-400 px-1 py-2 w-7">#</th>
-                    <th rowSpan={3} className="text-left border border-slate-400 px-2 py-2">PROGRAM DIKLAT</th>
+                    <th rowSpan={3} className="text-center border border-slate-400 px-1 py-2 w-7">No</th>
+                    <th rowSpan={3} className="text-left border border-slate-400 px-2 py-2">KATEGORI DIKLAT</th>
                     <th colSpan={7} className="text-center border border-slate-400 border-r-2 border-r-slate-500 bg-navy-900 py-1.5 text-white">PESERTA</th>
                     <th colSpan={7} className="text-center border border-slate-400 bg-navy-950 py-1.5 text-white">LULUSAN</th>
                   </tr>
@@ -1254,8 +1254,8 @@ export default function UptLaporanPage() {
                 </colgroup>
                 <thead>
                   <tr className="bg-navy-950 text-white font-black uppercase text-[10px]">
-                    <th rowSpan={4} className="text-center border border-slate-400 px-1 py-2 sticky left-0 z-40 bg-navy-950 text-white" style={{ left: 0, top: 0, width: 42, minWidth: 42, maxWidth: 42, backgroundColor: '#16283f' }}>#</th>
-                    <th rowSpan={4} className="text-left border border-slate-400 px-2 py-2 sticky z-40 bg-navy-950 text-white border-r-2 border-r-slate-400 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.4)]" style={{ left: 42, top: 0, width: 240, minWidth: 240, maxWidth: 240, backgroundColor: '#16283f' }}>PROGRAM DIKLAT</th>
+                    <th rowSpan={4} className="text-center border border-slate-400 px-1 py-2 sticky left-0 z-40 bg-navy-950 text-white" style={{ left: 0, top: 0, width: 42, minWidth: 42, maxWidth: 42, backgroundColor: '#16283f' }}>No</th>
+                    <th rowSpan={4} className="text-left border border-slate-400 px-2 py-2 sticky z-40 bg-navy-950 text-white border-r-2 border-r-slate-400 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.4)]" style={{ left: 42, top: 0, width: 240, minWidth: 240, maxWidth: 240, backgroundColor: '#16283f' }}>KATEGORI DIKLAT</th>
                     {activeMonths.map((mNum) => (
                       <th key={mNum} colSpan={10} className="text-center border border-slate-400 border-r-2 border-r-slate-500 bg-navy-900 px-2 py-1.5 text-gold-300">
                         {MONTHS[mNum - 1].toUpperCase()}
@@ -1419,9 +1419,9 @@ export default function UptLaporanPage() {
                         return (
                           <tr key={d.diklatId} className="bg-sky-50/40 hover:bg-sky-50/70">
                             <td className="border border-slate-300 sticky z-20 bg-sky-50/80" style={{ left: 0, width: 42, minWidth: 42, maxWidth: 42 }} />
-                            <td className="border border-slate-300 border-r-2 border-r-slate-400 px-2 py-1 sticky z-20 bg-sky-50/80" style={{ left: 42, width: 240, minWidth: 240, maxWidth: 240 }}>
-                              <span className="inline-flex items-center gap-1 text-slate-600 text-[9px] font-semibold pl-4 leading-tight">
-                                <span className="text-sky-400 font-black">•</span>{d.name}
+                            <td className="border border-slate-300 border-r-2 border-r-slate-400 px-2 py-1 sticky z-20 bg-sky-50/80 cell-program" style={{ left: 42, width: 240, minWidth: 240, maxWidth: 240 }}>
+                              <span className="inline-flex items-start gap-1 text-slate-600 text-[9px] font-semibold pl-4 leading-snug">
+                                <span className="text-sky-400 font-black shrink-0">•</span><span className="break-words">{d.name}</span>
                               </span>
                             </td>
                             {activeMonths.map((mNum) => {

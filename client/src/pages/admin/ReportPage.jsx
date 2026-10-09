@@ -1560,9 +1560,9 @@ function UptProgramMatrix({ u, month, periodLabel, year }) {
                   return (
                     <tr key={d.diklatId} className="bg-sky-50/40 hover:bg-sky-50/70">
                       <td className="border border-slate-300 sticky z-20 bg-sky-50/80" style={{ left: 0, width: 42, minWidth: 42, maxWidth: 42 }} />
-                      <td className="border border-slate-300 border-r-2 border-r-slate-400 px-2 py-1 sticky z-20 bg-sky-50/80" style={{ left: 42, width: 240, minWidth: 240, maxWidth: 240 }}>
-                        <span className="inline-flex items-center gap-1 text-slate-600 text-[9px] font-semibold pl-4 leading-tight">
-                          <span className="text-sky-400 font-black">•</span>{d.name}
+                      <td className="border border-slate-300 border-r-2 border-r-slate-400 px-2 py-1 sticky z-20 bg-sky-50/80 cell-program" style={{ left: 42, width: 240, minWidth: 240, maxWidth: 240 }}>
+                        <span className="inline-flex items-start gap-1 text-slate-600 text-[9px] font-semibold pl-4 leading-snug">
+                          <span className="text-sky-400 font-black shrink-0">•</span><span className="break-words">{d.name}</span>
                         </span>
                       </td>
                       {activeMonths.map((mNum) => {
