@@ -347,7 +347,8 @@ async function exportExcel(upt, { periodLabel, year, periodMode, activeMonths, m
       const cFinalPP = getColLetter(finalStartIdx + 3)
       const cFinalTotP = getColLetter(finalStartIdx + 4)
 
-      rowValues.push({ formula: `=${pTgtCols.join('+')}` })
+      // Target single-input = angka tetap tahunan (jangan jumlah 12 bulan)
+      rowValues.push(p.isSingle ? (p.targetPesertaTahunan || p.targetPeserta || 0) : { formula: `=${pTgtCols.join('+')}` })
       rowValues.push({ formula: `=${pLCols.join('+')}` })
       rowValues.push({ formula: `=${pPCols.join('+')}` })
       rowValues.push({ formula: `=SUM(${cFinalPL}${currentRow}:${cFinalPP}${currentRow})` })
@@ -358,7 +359,7 @@ async function exportExcel(upt, { periodLabel, year, periodMode, activeMonths, m
       const cFinalLP = getColLetter(finalStartIdx + 8)
       const cFinalTotL = getColLetter(finalStartIdx + 9)
 
-      rowValues.push({ formula: `=${lTgtCols.join('+')}` })
+      rowValues.push(p.isSingle ? (p.targetLulusanTahunan || p.targetLulusan || 0) : { formula: `=${lTgtCols.join('+')}` })
       rowValues.push({ formula: `=${lLCols.join('+')}` })
       rowValues.push({ formula: `=${lPCols.join('+')}` })
       rowValues.push({ formula: `=SUM(${cFinalLL}${currentRow}:${cFinalLP}${currentRow})` })
@@ -1372,14 +1373,16 @@ export default function UptLaporanPage() {
                     const isParentRow = p.isParent
                     const stickyBgClass = isParentRow ? 'bg-slate-200' : i % 2 === 0 ? 'bg-white' : 'bg-slate-100'
 
-                    // Aggregates across active months for this program row
+                    // Aggregates across active months for this program row.
+                    // Target single-input = ANGKA TETAP tahunan (bukan jumlah
+                    // 12 bulan); hanya data bulanan lama yang dijumlah.
                     const sumRange = (key) => activeMonths.reduce((s, m) => s + (p.byMonth?.[m]?.[key] || 0), 0)
-                    const rangeTargetPeserta = sumRange('targetPeserta')
+                    const rangeTargetPeserta = p.isSingle ? (p.targetPesertaTahunan || p.targetPeserta || 0) : sumRange('targetPeserta')
                     const rangePesertaL = sumRange('pesertaL')
                     const rangePesertaP = sumRange('pesertaP')
                     const rangePesertaTot = rangePesertaL + rangePesertaP
 
-                    const rangeTargetLulusan = sumRange('targetLulusan')
+                    const rangeTargetLulusan = p.isSingle ? (p.targetLulusanTahunan || p.targetLulusan || 0) : sumRange('targetLulusan')
                     const rangeLulusanL = sumRange('lulusanL')
                     const rangeLulusanP = sumRange('lulusanP')
                     const rangeLulusanTot = rangeLulusanL + rangeLulusanP
@@ -1564,12 +1567,14 @@ export default function UptLaporanPage() {
                     {(() => {
                       const parentProgs = upt.programs.filter((p) => p.isParent)
                       const sumAllActive = (key) => parentProgs.reduce((s, p) => s + activeMonths.reduce((sm, m) => sm + (p.byMonth?.[m]?.[key] || 0), 0), 0)
-                      const totTgtPeserta = sumAllActive('targetPeserta')
+                      // Target tetap tahunan untuk baris single-input (jangan ×12 bulan)
+                      const fixedTarget = (p, key) => key === 'targetPeserta' ? (p.targetPesertaTahunan || p.targetPeserta || 0) : (p.targetLulusanTahunan || p.targetLulusan || 0)
+                      const totTgtPeserta = parentProgs.reduce((s, p) => s + (p.isSingle ? fixedTarget(p, 'targetPeserta') : activeMonths.reduce((sm, m) => sm + (p.byMonth?.[m]?.targetPeserta || 0), 0)), 0)
                       const totPL = sumAllActive('pesertaL')
                       const totPP = sumAllActive('pesertaP')
                       const totPTot = totPL + totPP
 
-                      const totTgtLulusan = sumAllActive('targetLulusan')
+                      const totTgtLulusan = parentProgs.reduce((s, p) => s + (p.isSingle ? fixedTarget(p, 'targetLulusan') : activeMonths.reduce((sm, m) => sm + (p.byMonth?.[m]?.targetLulusan || 0), 0)), 0)
                       const totLL = sumAllActive('lulusanL')
                       const totLP = sumAllActive('lulusanP')
                       const totLTot = totLL + totLP
