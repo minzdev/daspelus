@@ -295,6 +295,30 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
   });
   const rowByPid = new Map(rows.map((r) => [r.programId, r]));
 
+  // Kategori WAJIB ngesum dari bawah: bila target baris masih 0, jumlahkan
+  // dari rincian diklat di bawahnya (sumber yang sama dengan kolom PK di
+  // Input Realisasi). Hanya mengisi yang masih 0 agar tidak ganda.
+  const fillFromDiklats = (row) => {
+    const details = row.diklatDetails || [];
+    if (!details.length) return;
+    const dTp = details.reduce((s, d) => s + (Number(d.targetPeserta) || 0), 0);
+    const dTl = details.reduce((s, d) => s + (Number(d.targetLulusan) || 0), 0);
+    if (dTp <= 0 && dTl <= 0) return;
+    const pMap = monthlyByProg.get(row.programId);
+    if ((row.targetPeserta || 0) === 0 && dTp > 0) {
+      row.targetPeserta = dTp;
+      if (pMap) for (let m = 1; m <= 12; m++) { const e = pMap.get(m); if ((e.targetPeserta || 0) === 0) e.targetPeserta = dTp; }
+    }
+    if ((row.targetPesertaTahunan || 0) === 0 && dTp > 0) row.targetPesertaTahunan = dTp;
+    if ((row.targetLulusan || 0) === 0 && dTl > 0) {
+      row.targetLulusan = dTl;
+      if (pMap) for (let m = 1; m <= 12; m++) { const e = pMap.get(m); if ((e.targetLulusan || 0) === 0) e.targetLulusan = dTl; }
+    }
+    if ((row.targetLulusanTahunan || 0) === 0 && dTl > 0) row.targetLulusanTahunan = dTl;
+  };
+  // Turunan dulu agar induk yang dijumlahkan di bawah ikut benar.
+  for (const row of rows) { if (!row.isParent) fillFromDiklats(row); }
+
   for (const row of rows) {
     if (!row.isParent) continue;
     const kids = visibleFlat.filter((c) => !c.isParent && c.parentId === row.programId);
@@ -318,6 +342,10 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
       }
     }
   }
+
+  // Induk yang masih 0 (induk tanpa turunan berdikat langsung, atau seluruh
+  // turunan 0) ikut ngesum dari rincian diklat langsungnya.
+  for (const row of rows) { if (row.isParent) fillFromDiklats(row); }
 
   for (const row of rows) {
     const pMap = monthlyByProg.get(row.programId);
