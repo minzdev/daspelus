@@ -23,6 +23,18 @@ jobs:
     if: ${{ vars.DEPLOY_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Cek kelengkapan secrets
+        run: |
+          missing=""
+          [ -z "${{ secrets.VPS_HOST }}" ] && missing="$missing VPS_HOST"
+          [ -z "${{ secrets.VPS_USER }}" ] && missing="$missing VPS_USER"
+          [ -z "${{ secrets.VPS_SSH_KEY }}" ] && missing="$missing VPS_SSH_KEY"
+          [ -z "${{ secrets.APP_DIR }}" ] && missing="$missing APP_DIR"
+          if [ -n "$missing" ]; then
+            echo "::error::Secrets belum lengkap:$missing — isi di repo Settings → Secrets and variables → Actions → Repository secrets (bukan Environment/Variables)."
+            exit 1
+          fi
+          echo "Semua secrets deploy terisi. Lanjut SSH ke VPS."
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
