@@ -53,5 +53,19 @@ jobs:
             echo "== reload backend (zero-downtime) =="
             pm2 reload daspeslus-api || (cd ${{ secrets.APP_DIR }}/server && pm2 start src/index.js --name daspeslus-api)
             pm2 save
-            echo "== selesai =="
+            echo "== health check (maks 60 detik) =="
+            PORT_NOW=$(grep -E '^PORT=' ${{ secrets.APP_DIR }}/server/.env 2>/dev/null | cut -d= -f2)
+            PORT_NOW=${PORT_NOW:-8787}
+            ok=""
+            for i in $(seq 1 12); do
+              if curl -fsS -m 5 http://127.0.0.1:$PORT_NOW/api/health >/dev/null 2>&1; then ok="yes"; break; fi
+              echo "percobaan $i/12: backend belum siap, tunggu 5 detik..."
+              sleep 5
+            done
             pm2 list
+            if [ -z "$ok" ]; then
+              echo "::error::Backend tidak lolos health check http://127.0.0.1:$PORT_NOW/api/health — cek 'pm2 logs daspeslus-api' di VPS."
+              pm2 logs daspeslus-api --lines 30 --nostream || true
+              exit 1
+            fi
+            echo "== selesai, backend ONLINE =="
