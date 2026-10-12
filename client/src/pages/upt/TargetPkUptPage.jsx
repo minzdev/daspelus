@@ -145,17 +145,37 @@ export default function TargetPkUptPage() {
     return groups
   }, [leafPrograms, visiblePrograms, programs])
 
+  // Satu diklat hanya tampil di kategori paling spesifik: induk yang
+  // turunannya ikut terpetakan tidak menampilkan rincian langsung
+  // (induk murni auto-sum, sama seperti Input Realisasi).
   const diklatByProgram = useMemo(() => {
+    const progParent = new Map(programs.map((p) => [String(p.id), p.parentId ? String(p.parentId) : null]))
+    const displayIds = (d) => {
+      const ids = (d.programIds || []).map(String)
+      if (ids.length < 2) return ids
+      const ancestors = new Set()
+      for (const id of ids) {
+        let par = progParent.get(id)
+        const seen = new Set([id])
+        while (par && !seen.has(par)) {
+          ancestors.add(par)
+          seen.add(par)
+          par = progParent.get(par)
+        }
+      }
+      const next = ids.filter((id) => !ancestors.has(id))
+      return next.length ? next : ids
+    }
     const m = new Map()
     for (const d of diklats) {
-      for (const pid of d.programIds || []) {
+      for (const pid of displayIds(d)) {
         if (!m.has(pid)) m.set(pid, [])
         m.get(pid).push(d)
       }
     }
     for (const [, arr] of m) arr.sort((a, b) => String(a.name).localeCompare(String(b.name)))
     return m
-  }, [diklats])
+  }, [diklats, programs])
 
   const itemsByPid = useMemo(() => {
     const m = new Map()

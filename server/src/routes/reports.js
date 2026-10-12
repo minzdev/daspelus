@@ -249,9 +249,24 @@ function buildUptReport({ upt, flat, realDocs, targetDocs, month, monthFrom, mon
   const diklatDetailsByProg = new Map(
     [...diklatRealByProg.entries()].map(([pid, m]) => [pid, [...m.values()]])
   );
+  // Satu diklat hanya tampil di kategori paling spesifik: tautan ke induk
+  // diabaikan bila turunan ikut terpeta (induk murni auto-sum, tidak ganda).
+  const flatParentOf = new Map((flat || []).map((p) => [String(p.id), p.parentId ? String(p.parentId) : null]));
+  const effDiklatPids = (d) => {
+    const ids = (Array.isArray(d.programIds) ? d.programIds : []).map(String);
+    if (ids.length < 2) return ids;
+    const ancestors = new Set();
+    for (const id of ids) {
+      let par = flatParentOf.get(id);
+      const seen = new Set([id]);
+      while (par && !seen.has(par)) { ancestors.add(par); seen.add(par); par = flatParentOf.get(par); }
+    }
+    const next = ids.filter((id) => !ancestors.has(id));
+    return next.length ? next : ids;
+  };
   // Sertakan juga diklat terpetakan yang belum ada realisasinya (angka 0) agar daftar sinkron
   for (const d of diklats) {
-    for (const pid of d.programIds || []) {
+    for (const pid of effDiklatPids(d)) {
       const key = String(pid);
       const arr = diklatDetailsByProg.get(key) || [];
       if (!arr.some((e) => String(e.diklatId) === String(d.id))) {

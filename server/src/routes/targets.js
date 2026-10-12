@@ -706,10 +706,25 @@ router.put("/my", requireUpt, async (req, res) => {
     for (const pid of directMap.keys()) touched.add(String(pid));
 
     const allDiklats = await Diklat.findAll({ where: { uptId, year: y } });
+    // Normalisasi per diklat: tautan ke induk diabaikan bila turunan ikut
+    // terpeta, agar dokumen Target induk tidak ikut ganda (sembuh saat simpan).
+    const progParentMap = new Map((await Program.findAll({ attributes: ["id", "parentId"] })).map((p) => [String(p.id), p.parentId ? String(p.parentId) : null]));
+    const effDiklatPids = (d) => {
+      const ids = (Array.isArray(d.programIds) ? d.programIds : []).map(String);
+      if (ids.length < 2) return ids;
+      const ancestors = new Set();
+      for (const id of ids) {
+        let par = progParentMap.get(id);
+        const seen = new Set([id]);
+        while (par && !seen.has(par)) { ancestors.add(par); seen.add(par); par = progParentMap.get(par); }
+      }
+      const next = ids.filter((id) => !ancestors.has(id));
+      return next.length ? next : ids;
+    };
     const progSum = new Map(); // pid -> { tp, tl }
     for (const pid of touched) progSum.set(pid, { tp: 0, tl: 0 });
     for (const d of allDiklats) {
-      const ids = Array.isArray(d.programIds) ? d.programIds : [];
+      const ids = effDiklatPids(d);
       const tbp = (d.targetByProgram && typeof d.targetByProgram === 'object') ? d.targetByProgram : {};
       for (const pid of ids) {
         const key = String(pid);
