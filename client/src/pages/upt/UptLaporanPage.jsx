@@ -541,7 +541,7 @@ function exportPdf(upt, { periodLabel, year, periodMode, monthFrom, monthTo, sin
     ? `Rentang ${MONTHS[monthFrom - 1]} s/d ${MONTHS[monthTo - 1]} ${year}`
     : periodMode === 'single'
     ? `Bulan ${MONTHS[singleMonth - 1]} ${year}`
-    : `Full 1 Tahun ${year}`
+    : `Tahun ${year}`
 
   doc.text(`Nama UPT : ${upt.uptName} (${upt.uptCode})  |  Periode : ${displayPeriod}  |  Tahun : ${year}`, pageW / 2, y, { align: 'center' })
   y += 10
@@ -826,8 +826,8 @@ export default function UptLaporanPage() {
               <img src={logoBpsdm} alt="Logo BPSDMP" className="h-full w-full object-contain max-h-7 max-w-7" onError={(e) => e.target.style.display = 'none'} />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-black text-white tracking-tight">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <h1 className="text-[15px] sm:text-lg font-black text-white tracking-tight whitespace-nowrap">
                   {reportTitle}
                 </h1>
               </div>
@@ -863,9 +863,9 @@ export default function UptLaporanPage() {
                 value={periodMode}
                 onChange={(e) => setPeriodMode(e.target.value)}
               >
-                <option value="all" className="bg-navy-900 text-white font-bold py-1">Full 1 Tahun</option>
-                <option value="single" className="bg-navy-900 text-white font-bold py-1">Per Bulan (Single)</option>
-                <option value="range" className="bg-navy-900 text-white font-bold py-1">Rentang Bulan (Range)</option>
+                <option value="all" className="bg-navy-900 text-white font-bold py-1">Pertahun</option>
+                <option value="single" className="bg-navy-900 text-white font-bold py-1">Perbulan</option>
+                <option value="range" className="bg-navy-900 text-white font-bold py-1">Rentang Bulan</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-gold-300">
                 <IconChevronDown className="h-3.5 w-3.5" />
