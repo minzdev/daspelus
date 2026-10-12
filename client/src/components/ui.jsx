@@ -5,7 +5,7 @@ import { STATUS_META, fmtPct } from '../utils/format'
 import { IconX, IconEye, IconEyeOff, IconAlertTriangle, IconInfo, IconTrash } from './icons'
 
 /* ============ Kartu Statistik ============ */
-export function StatCard({ icon, label, value, sub, tone = 'navy', delay = 0 }) {
+export function StatCard({ icon, label, value, sub, tone = 'navy', delay = 0, labelClass = '', valueClass = '' }) {
   const tones = {
     navy: { iconBg: 'bg-navy-800 text-gold-300', bar: 'bg-navy-600' },
     gold: { iconBg: 'bg-gold-500 text-white', bar: 'bg-gold-500' },
@@ -24,13 +24,13 @@ export function StatCard({ icon, label, value, sub, tone = 'navy', delay = 0 }) 
       <div className={clsx('absolute inset-x-0 top-0 h-1', t.bar)} />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-navy-400">{label}</p>
-          <p className="mt-2 text-2xl font-extrabold text-navy-900 tabular-nums tracking-tight">
+          <p className={clsx('text-[11px] font-bold uppercase tracking-wider text-navy-400 leading-snug', labelClass)}>{label}</p>
+          <p className={clsx('mt-2 text-2xl font-extrabold text-navy-900 tabular-nums tracking-tight', valueClass)}>
             {value}
           </p>
           {sub && <p className="mt-1 text-xs text-navy-500">{sub}</p>}
         </div>
-        <div className={clsx('stat-icon', t.iconBg)}>{icon}</div>
+        <div className={clsx('stat-icon shrink-0', t.iconBg)}>{icon}</div>
       </div>
     </div>
   )

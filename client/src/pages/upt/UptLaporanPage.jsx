@@ -973,54 +973,60 @@ export default function UptLaporanPage() {
         </div>
       )}
 
-      {/* Ringkasan 6 StatCard Simetris */}
+      {/* Ringkasan 6 StatCard Simetris — tanpa keterangan bawah, angka besar tegas */}
       <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
           icon={<IconTarget className="h-4 w-4" />}
           label={`Target Peserta (${statPeriodLabel})`}
           value={fmtNum(targetPesertaPeriode)}
-          sub={periodMode === 'all' ? 'Akumulasi 1 Tahun' : `Tahunan: ${fmtNum(targetPesertaTahunan)}`}
           tone="navy"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconPeople className="h-4 w-4" />}
           label="Realisasi Peserta"
           value={fmtNum(upt?.totalPeserta ?? 0)}
-          sub={periodMode === 'all' ? 'Total 1 Tahun' : periodMode === 'range' ? `Realisasi ${MONTHS[monthFrom - 1].slice(0, 3)} - ${MONTHS[monthTo - 1].slice(0, 3)}` : 'Realisasi Bulan ini'}
           tone="sky"
           delay={30}
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconTarget className="h-4 w-4" />}
           label="Capaian Peserta"
           value={pctText(upt?.totalPeserta ?? 0, targetPesertaPeriode)}
-          sub={periodMode === 'all' ? '% vs Target Tahunan' : '% vs Target Periode'}
           tone="emerald"
           delay={60}
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconTarget className="h-4 w-4" />}
           label={`Target Lulusan (${statPeriodLabel})`}
           value={fmtNum(targetLulusanPeriode)}
-          sub={periodMode === 'all' ? 'Akumulasi 1 Tahun' : `Tahunan: ${fmtNum(targetLulusanTahunan)}`}
           tone="gold"
           delay={90}
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconGraduation className="h-4 w-4" />}
           label="Realisasi Lulusan"
           value={fmtNum(upt?.totalLulusan ?? 0)}
-          sub={periodMode === 'all' ? 'Total 1 Tahun' : periodMode === 'range' ? `Realisasi ${MONTHS[monthFrom - 1].slice(0, 3)} - ${MONTHS[monthTo - 1].slice(0, 3)}` : 'Realisasi Bulan ini'}
           tone="sky"
           delay={120}
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconGraduation className="h-4 w-4" />}
           label="Capaian Lulusan"
           value={pctText(upt?.totalLulusan ?? 0, targetLulusanPeriode)}
-          sub={periodMode === 'all' ? '% vs Target Tahunan' : '% vs Target Periode'}
           tone="emerald"
           delay={150}
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
       </div>
 
