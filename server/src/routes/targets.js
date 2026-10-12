@@ -1351,3 +1351,5 @@ router.patch("/submissions/:id/reject", rejectTargetSubmission);
 router.patch("/submissions/:id/reject-bpsdmp", rejectTargetSubmission);
 
 module.exports = router;
+// Dipakai route diklat saat perbaikan pemetaan agar perubahan target tercatat di riwayat.
+module.exports.recordTargetRevision = recordTargetRevision;

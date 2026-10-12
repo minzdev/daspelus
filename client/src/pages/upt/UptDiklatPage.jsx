@@ -39,6 +39,8 @@ export default function UptDiklatPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false)
+  const [normalizeConfirmOpen, setNormalizeConfirmOpen] = useState(false)
+  const [normalizing, setNormalizing] = useState(false)
 
   // Import Excel (Multi-Program / Grouping Sekaligus)
   const [importOpen, setImportOpen] = useState(false)
@@ -310,6 +312,20 @@ export default function UptDiklatPage() {
       toast.error('Gagal menghapus seluruh diklat', apiError(err))
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  async function handleNormalize() {
+    setNormalizing(true)
+    try {
+      const { data } = await api.post('/diklats/normalize-programs', { year })
+      toast.success('Pemetaan dirapikan', data.message || 'Pemetaan diklat berhasil dirapikan.', 8000)
+      setNormalizeConfirmOpen(false)
+      await load()
+    } catch (err) {
+      toast.error('Gagal merapikan', apiError(err))
+    } finally {
+      setNormalizing(false)
     }
   }
 
@@ -966,6 +982,16 @@ export default function UptDiklatPage() {
         {diklats.length > 0 && (
           <button
             type="button"
+            className="btn-secondary !rounded-xl whitespace-nowrap"
+            onClick={() => setNormalizeConfirmOpen(true)}
+            title="Perbaiki diklat yang terpetakan ganda ke induk & turunan (mis. Pelatihan Teknis sekaligus ASN/NON ASN) agar angka tidak ganda"
+          >
+            <IconCheck className="h-4 w-4" /> Rapikan Pemetaan
+          </button>
+        )}
+        {diklats.length > 0 && (
+          <button
+            type="button"
             className="btn-secondary !rounded-xl !text-red-600 hover:!bg-red-50 !border-red-200 whitespace-nowrap"
             onClick={() => setDeleteAllConfirmOpen(true)}
             title="Hapus seluruh diklat tahun ini"
@@ -1365,6 +1391,19 @@ export default function UptDiklatPage() {
         cancelLabel="Batal"
         confirmTone="danger"
         loading={bulkDeleting}
+      />
+
+      {/* Konfirmasi Rapikan Pemetaan */}
+      <ConfirmDialog
+        open={normalizeConfirmOpen}
+        onCancel={() => { if (!normalizing) setNormalizeConfirmOpen(false) }}
+        onConfirm={handleNormalize}
+        title={`Rapikan Pemetaan ${year}?`}
+        body={`Diklat yang terpetakan ganda ke induk dan turunannya (mis. "Pelatihan Teknis" sekaligus "ASN"/"NON ASN") akan dipindah hanya ke kategori paling spesifik, target program dihitung ulang, dan perubahannya tercatat di riwayat. Angka ganda (mis. 105 jadi 210) akan kembali benar.`}
+        confirmLabel="Ya, Rapikan"
+        cancelLabel="Batal"
+        confirmTone="primary"
+        loading={normalizing}
       />
 
       {/* Konfirmasi Hapus Semua */}
