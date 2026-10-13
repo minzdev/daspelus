@@ -30,7 +30,6 @@ import PimpinanInboxPage from './pages/pimpinan/InboxPage'
 import PimpinanUnlockInboxPage from './pages/pimpinan/UnlockInboxPage'
 import PimpinanTargetInboxPage from './pages/pimpinan/TargetInboxPage'
 import PimpinanDashboardPage from './pages/pimpinan/DashboardPage'
-import PimpinanLaporanPage from './pages/pimpinan/LaporanPage'
 import PusbangInboxPage from './pages/pusbang/InboxPage'
 import PusbangUnlockInboxPage from './pages/pusbang/UnlockInboxPage'
 import PusbangDashboardPage from './pages/pusbang/DashboardPage'
@@ -121,7 +120,8 @@ export default function App() {
               <Route path="/pimpinan/penyerapan/taruna-inbox" element={<Navigate to="/pimpinan/persetujuan?category=taruna" replace />} />
               <Route path="/pimpinan/penyerapan/inbox" element={<Navigate to="/pimpinan/persetujuan?category=taruna" replace />} />
               <Route path="/pimpinan/penyerapan/laporan" element={<UptAbsorptionReportPage />} />
-              <Route path="/pimpinan/laporan" element={<PimpinanLaporanPage />} />
+              {/* Format sama persis dengan Laporan Realisasi Admin UPT (read-only + ekspor) */}
+              <Route path="/pimpinan/laporan" element={<UptLaporanPage />} />
               <Route path="/pimpinan/unlock" element={<Navigate to="/pimpinan/persetujuan?category=unlock" replace />} />
               <Route path="/pimpinan/riwayat" element={<RiwayatPage />} />
             </Route>
