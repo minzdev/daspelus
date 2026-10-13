@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api, { apiError } from '../../lib/api'
-import { Alert, SkeletonRows, StatCard } from '../../components/ui'
+import { Alert, EmptyState, SkeletonRows, StatCard } from '../../components/ui'
 import {
   IconTarget, IconBuilding, IconPeople, IconGraduation, IconCheck, IconChevronDown, IconFileText,
 } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
 import { fmtNum, yearOptions, MONTHS } from '../../utils/format'
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts'
 
 const TARUNA_STATUS_LABELS = {
   draft: { label: 'Draf UPT', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
@@ -60,6 +63,28 @@ export default function PimpinanDashboardPage() {
     if (!t || t <= 0) return '-'
     return `${Math.round((r / t) * 100)}%`
   }
+
+  // Tren bulanan 1 tahun: realisasi per bulan (naik-turun) + garis kumulatif
+  const trendData = useMemo(() => {
+    const ms = ach?.monthly || []
+    const short = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+    let cp = 0, cl = 0
+    return ms.map((m, i) => {
+      const mp = Number(m.cumPeserta) || 0
+      const ml = Number(m.cumLulusan) || 0
+      const row = {
+        label: short[i] || `B${i + 1}`,
+        peserta: Math.max(0, mp - cp),
+        lulusan: Math.max(0, ml - cl),
+        kumPeserta: mp,
+        kumLulusan: ml,
+      }
+      cp = mp
+      cl = ml
+      return row
+    })
+  }, [ach])
+  const trendTotal = trendData.reduce((s, r) => s + r.peserta + r.lulusan, 0)
 
   // Master Data Taruna bersifat tahunan (1 pengajuan/tahun, berlaku 12 bulan)
   const tarunaYearly = (data.tarunaSubmissions || [])[0] || null
@@ -122,7 +147,6 @@ export default function PimpinanDashboardPage() {
           icon={<IconTarget className="h-5 w-5" />}
           label="Target Peserta PK"
           value={fmtNum(ach?.targetPeserta || 0)}
-          sub={`Realisasi: ${fmtNum(ach?.totalPeserta || 0)}`}
           tone="navy"
           labelClass="!font-extrabold"
           valueClass="!text-[28px] !font-black !leading-none"
@@ -147,7 +171,6 @@ export default function PimpinanDashboardPage() {
           icon={<IconTarget className="h-5 w-5" />}
           label="Target Lulusan PK"
           value={fmtNum(ach?.targetLulusan || 0)}
-          sub={`Realisasi: ${fmtNum(ach?.totalLulusan || 0)}`}
           tone="gold"
           labelClass="!font-extrabold"
           valueClass="!text-[28px] !font-black !leading-none"
@@ -172,7 +195,6 @@ export default function PimpinanDashboardPage() {
           icon={<IconPeople className="h-5 w-5" />}
           label="Persetujuan Data Taruna"
           value={pendingTaruna > 0 ? `${pendingTaruna} Pending` : 'Terverifikasi'}
-          sub={pendingTaruna > 0 ? 'Menunggu verifikasi Anda' : 'Semua pengajuan diproses'}
           tone={pendingTaruna > 0 ? 'gold' : 'emerald'}
           labelClass="!font-extrabold"
           valueClass="!text-[22px] !font-black !leading-tight"
@@ -181,11 +203,47 @@ export default function PimpinanDashboardPage() {
           icon={<IconGraduation className="h-5 w-5" />}
           label="Persetujuan Penyerapan"
           value={pendingAbsorption > 0 ? `${pendingAbsorption} Pending` : 'Terverifikasi'}
-          sub={pendingAbsorption > 0 ? 'Menunggu persetujuan Anda' : 'Semua laporan diproses'}
           tone={pendingAbsorption > 0 ? 'gold' : 'emerald'}
           labelClass="!font-extrabold"
           valueClass="!text-[22px] !font-black !leading-tight"
         />
+      </div>
+
+      {/* Grafik Tren Realisasi Bulanan 1 Tahun */}
+      <div className="card flex flex-col">
+        <div className="card-header border-b border-surface-border pb-4">
+          <div>
+            <h3 className="card-title">Tren Realisasi Bulanan {year}</h3>
+            <p className="card-subtitle">Naik-turun peserta & lulusan per bulan + garis kumulatif</p>
+          </div>
+        </div>
+        <div className="p-4 sm:p-5 h-[320px] flex-1">
+          {trendTotal === 0 ? (
+            <EmptyState
+              icon={<IconTarget className="h-6 w-6" />}
+              title="Belum ada realisasi"
+              desc={`Belum ada data realisasi tahun ${year} untuk digambarkan.`}
+            />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={trendData} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(22, 49, 78, 0.04)' }}
+                  contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                  formatter={(v) => fmtNum(v)}
+                />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                <Bar dataKey="peserta" name="Peserta / bulan" fill="#16314E" radius={[6, 6, 0, 0]} maxBarSize={24} />
+                <Bar dataKey="lulusan" name="Lulusan / bulan" fill="#F59E0B" radius={[6, 6, 0, 0]} maxBarSize={24} />
+                <Line type="monotone" dataKey="kumPeserta" name="Kumulatif peserta" stroke="#0284C7" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="kumLulusan" name="Kumulatif lulusan" stroke="#10B981" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* MODUL 2: Persetujuan Data Penyerapan Lulusan */}
