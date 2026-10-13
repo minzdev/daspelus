@@ -63,7 +63,7 @@ export default function UnlockTargetPkPage() {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'approved':
-        return <span className="text-xs font-bold px-2.5 py-1 rounded-full ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200">Disetujui — silakan revisi di Input Target PK</span>
+        return <span className="text-xs font-bold px-2.5 py-1 rounded-full ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200">Disetujui — revisi di Input Target PK</span>
       case 'rejected':
         return <span className="text-xs font-bold px-2.5 py-1 rounded-full ring-1 bg-red-50 text-red-700 ring-red-200">Ditolak</span>
       case 'pending_pimpinan':
@@ -86,10 +86,7 @@ export default function UnlockTargetPkPage() {
         <div>
           <h1 className="page-title">Perubahan Target PK</h1>
           <p className="page-desc">
-            Alur tetap: <strong>input sekali per tahun → terkunci → revisi via pengajuan unlock</strong>.
-            Angka yang dipakai di seluruh laporan & capaian adalah <strong>update terakhir</strong>,
-            sedangkan <strong>Target Awal + setiap revisi (angka & waktu)</strong> terekam lengkap di bawah.
-            Alur persetujuan unlock: Pimpinan UPT → Admin BPSDMP.
+            Target diinput <strong>sekali per tahun</strong>. Untuk mengubahnya, <strong>ajukan unlock dulu</strong> — angka terbaru yang berlaku.
           </p>
         </div>
         <button className="btn-secondary !rounded-xl" onClick={load}>
@@ -100,15 +97,15 @@ export default function UnlockTargetPkPage() {
       {/* Steps */}
       <div className="grid gap-2 sm:grid-cols-3">
         {[
-          { n: '1', t: 'Input sekali', d: 'Isi Target PK di menu Input Target PK, lalu kirim ke Pimpinan.', active: false },
-          { n: '2', t: 'Ajukan unlock', d: 'Isi alasan perubahan di form bawah bila target sudah terkunci.', active: !hasApproved && !!pendingForYear === false },
-          { n: '3', t: 'Revisi & berlaku terbaru', d: 'Setelah disetujui, revisi angka — yang terbaru langsung berlaku.', active: hasApproved },
+          { n: '1', t: 'Input sekali', d: 'Isi & kirim ke Pimpinan.', active: false },
+          { n: '2', t: 'Ajukan unlock', d: 'Isi alasan di form bawah.', active: !hasApproved && !!pendingForYear === false },
+          { n: '3', t: 'Revisi berlaku', d: 'Angka terbaru langsung dipakai.', active: hasApproved },
         ].map((s) => (
-          <div key={s.n} className={`rounded-2xl border p-4 flex gap-3 ${s.active ? 'border-navy-900 bg-navy-50' : 'border-slate-200 bg-white'}`}>
-            <span className={`h-8 w-8 shrink-0 rounded-xl flex items-center justify-center font-black text-sm ${s.active ? 'bg-navy-900 text-white' : 'bg-slate-100 text-slate-500'}`}>{s.n}</span>
-            <div>
-              <p className="text-sm font-extrabold text-slate-900">{s.t}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{s.d}</p>
+          <div key={s.n} className={`rounded-2xl border px-3.5 py-3 flex gap-2.5 items-center ${s.active ? 'border-navy-900 bg-navy-50' : 'border-slate-200 bg-white'}`}>
+            <span className={`h-7 w-7 shrink-0 rounded-xl flex items-center justify-center font-black text-xs ${s.active ? 'bg-navy-900 text-white' : 'bg-slate-100 text-slate-500'}`}>{s.n}</span>
+            <div className="min-w-0">
+              <p className="text-[13px] font-extrabold text-slate-900 leading-tight">{s.t}</p>
+              <p className="text-[11px] text-slate-500 leading-tight">{s.d}</p>
             </div>
           </div>
         ))}
@@ -118,19 +115,18 @@ export default function UnlockTargetPkPage() {
 
       {pendingForYear && (
         <Alert type="info">
-          Pengajuan unlock Target PK {year} sedang <strong>{pendingForYear.status}</strong>. Tunggu persetujuan sebelum merevisi — riwayat pengajuan ada di bawah.
+          Pengajuan unlock {year} menunggu persetujuan.
         </Alert>
       )}
       {hasApproved && (
         <Alert type="success">
-          Unlock Target PK {year} <strong>disetujui</strong> — silakan revisi angka di{' '}
-          <Link to="/upt/target-pk" className="font-bold underline">Input Target PK</Link>, lalu kirim ulang ke Pimpinan. Angka terbaru otomatis berlaku & tercatat sebagai revisi.
+          Unlock disetujui — revisi di <Link to="/upt/target-pk" className="font-bold underline">Input Target PK</Link>, lalu kirim ulang.
         </Alert>
       )}
 
       <div className="card rounded-2xl border border-slate-200 p-5">
-        <h3 className="text-sm font-bold text-slate-900">Ajukan Perubahan / Unlock Target PK {year}</h3>
-        <p className="text-xs text-slate-500 mt-1">Satu pengajuan per tahun · wajib isi alasan perubahan (mis. penyesuaian kuota, tambah diklat, koreksi program).</p>
+        <h3 className="text-sm font-bold text-slate-900">Ajukan Unlock Target PK {year}</h3>
+        <p className="text-xs text-slate-500 mt-1">Wajib isi alasan perubahan.</p>
         <form onSubmit={handleSubmit} className="mt-3 grid gap-3 sm:grid-cols-4">
           <div>
             <label className="form-label">Tahun Target</label>
@@ -166,7 +162,7 @@ export default function UnlockTargetPkPage() {
           <span className="h-8 w-8 rounded-xl bg-navy-900 text-gold-300 flex items-center justify-center text-sm">◷</span>
           <div>
             <h3 className="text-sm font-extrabold text-slate-900">Riwayat Angka Target PK {year}</h3>
-            <p className="text-xs text-slate-500">Target Awal = penyimpanan pertama · setiap perubahan angka & waktu terekam otomatis</p>
+            <p className="text-xs text-slate-500">Awal + setiap revisi tercatat otomatis.</p>
           </div>
         </div>
         {loading ? <SkeletonRows rows={3} /> : <TargetRevisionHistory revisions={revisions} year={year} />}
@@ -183,7 +179,7 @@ export default function UnlockTargetPkPage() {
           <EmptyState
             icon={<IconTarget className="h-6 w-6" />}
             title="Belum ada pengajuan"
-            desc="Belum ada pengajuan unlock Target PK untuk UPT Anda. Ajukan di form atas bila target sudah terkunci dan perlu direvisi."
+            desc="Ajukan di form atas bila target perlu direvisi."
           />
         ) : (
           <div className="divide-y divide-slate-100">
