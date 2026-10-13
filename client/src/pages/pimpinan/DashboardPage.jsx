@@ -194,22 +194,6 @@ export default function PimpinanDashboardPage() {
           labelClass="!font-extrabold"
           valueClass="!text-[28px] !font-black !leading-none"
         />
-        <StatCard
-          icon={<IconPeople className="h-5 w-5" />}
-          label="Persetujuan Data Taruna"
-          value={pendingTaruna > 0 ? `${pendingTaruna} Pending` : 'Terverifikasi'}
-          tone={pendingTaruna > 0 ? 'gold' : 'emerald'}
-          labelClass="!font-extrabold"
-          valueClass="!text-[22px] !font-black !leading-tight"
-        />
-        <StatCard
-          icon={<IconGraduation className="h-5 w-5" />}
-          label="Persetujuan Penyerapan"
-          value={pendingAbsorption > 0 ? `${pendingAbsorption} Pending` : 'Terverifikasi'}
-          tone={pendingAbsorption > 0 ? 'gold' : 'emerald'}
-          labelClass="!font-extrabold"
-          valueClass="!text-[22px] !font-black !leading-tight"
-        />
       </div>
 
       {/* Grafik Tren Realisasi Bulanan 1 Tahun (SVG murni) */}
