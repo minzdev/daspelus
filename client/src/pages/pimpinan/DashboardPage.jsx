@@ -7,9 +7,6 @@ import {
 } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
 import { fmtNum, yearOptions, MONTHS } from '../../utils/format'
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts'
 
 const TARUNA_STATUS_LABELS = {
   draft: { label: 'Draf UPT', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
@@ -210,7 +207,7 @@ export default function PimpinanDashboardPage() {
         />
       </div>
 
-      {/* Grafik Tren Realisasi Bulanan 1 Tahun */}
+      {/* Grafik Tren Realisasi Bulanan 1 Tahun (SVG murni) */}
       <div className="card flex flex-col">
         <div className="card-header border-b border-surface-border pb-4">
           <div>
@@ -218,7 +215,7 @@ export default function PimpinanDashboardPage() {
             <p className="card-subtitle">Naik-turun peserta & lulusan per bulan + garis kumulatif</p>
           </div>
         </div>
-        <div className="p-4 sm:p-5 h-[320px] flex-1">
+        <div className="p-4 sm:p-5">
           {trendTotal === 0 ? (
             <EmptyState
               icon={<IconTarget className="h-6 w-6" />}
@@ -226,23 +223,7 @@ export default function PimpinanDashboardPage() {
               desc={`Belum ada data realisasi tahun ${year} untuk digambarkan.`}
             />
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={trendData} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: 'rgba(22, 49, 78, 0.04)' }}
-                  contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                  formatter={(v) => fmtNum(v)}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                <Bar dataKey="peserta" name="Peserta / bulan" fill="#16314E" radius={[6, 6, 0, 0]} maxBarSize={24} />
-                <Bar dataKey="lulusan" name="Lulusan / bulan" fill="#F59E0B" radius={[6, 6, 0, 0]} maxBarSize={24} />
-                <Line type="monotone" dataKey="kumPeserta" name="Kumulatif peserta" stroke="#0284C7" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="kumLulusan" name="Kumulatif lulusan" stroke="#10B981" strokeWidth={2} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <MonthlyTrendChart data={trendData} />
           )}
         </div>
       </div>
@@ -392,6 +373,80 @@ export default function PimpinanDashboardPage() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ─── Grafik tren bulanan SVG murni: batang per bulan + garis kumulatif ─── */
+function MonthlyTrendChart({ data }) {
+  const W = 720
+  const H = 260
+  const padL = 46
+  const padR = 12
+  const padT = 14
+  const padB = 28
+  const plotW = W - padL - padR
+  const plotH = H - padT - padB
+  const n = Math.max(1, data.length)
+  const maxV = Math.max(1, ...data.map((r) => Math.max(r.peserta, r.lulusan, r.kumPeserta, r.kumLulusan)))
+  const gw = plotW / n
+  const barW = Math.min(18, Math.max(6, gw / 3.4))
+  const cx = (i) => padL + i * gw + gw / 2
+  const y = (v) => padT + plotH - (Math.max(0, v) / maxV) * plotH
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxV * f))
+  const line = (key, color) => data.map((r, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pb-2 text-[11px] font-bold text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: '#16314E' }} />Peserta / bulan
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: '#F59E0B' }} />Lulusan / bulan
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-5 rounded-full" style={{ background: '#0284C7' }} />Kumulatif peserta
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-5 rounded-full" style={{ background: '#10B981' }} />Kumulatif lulusan
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 260, display: 'block' }} role="img" aria-label="Tren realisasi bulanan">
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#E2E8F0" strokeWidth={1} />
+            <text x={padL - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#64748B" fontWeight={600}>
+              {fmtNum(t)}
+            </text>
+          </g>
+        ))}
+        {data.map((r, i) => (
+          <g key={r.label}>
+            <rect x={cx(i) - barW - 1.5} y={y(r.peserta)} width={barW} height={Math.max(0, padT + plotH - y(r.peserta))} rx={3} fill="#16314E">
+              <title>{`${r.label} — Peserta: ${fmtNum(r.peserta)}`}</title>
+            </rect>
+            <rect x={cx(i) + 1.5} y={y(r.lulusan)} width={barW} height={Math.max(0, padT + plotH - y(r.lulusan))} rx={3} fill="#F59E0B">
+              <title>{`${r.label} — Lulusan: ${fmtNum(r.lulusan)}`}</title>
+            </rect>
+            <text x={cx(i)} y={H - 8} textAnchor="middle" fontSize={11} fill="#64748B" fontWeight={600}>
+              {r.label}
+            </text>
+          </g>
+        ))}
+        <polyline points={line('kumPeserta')} fill="none" stroke="#0284C7" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={line('kumLulusan')} fill="none" stroke="#10B981" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        {data.map((r, i) => (
+          <g key={`dot-${r.label}`}>
+            <circle cx={cx(i)} cy={y(r.kumPeserta)} r={3} fill="#0284C7" stroke="#fff" strokeWidth={1.5}>
+              <title>{`${r.label} — Kumulatif peserta: ${fmtNum(r.kumPeserta)}`}</title>
+            </circle>
+            <circle cx={cx(i)} cy={y(r.kumLulusan)} r={3} fill="#10B981" stroke="#fff" strokeWidth={1.5}>
+              <title>{`${r.label} — Kumulatif lulusan: ${fmtNum(r.kumLulusan)}`}</title>
+            </circle>
+          </g>
+        ))}
+      </svg>
     </div>
   )
 }
