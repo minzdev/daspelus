@@ -46,12 +46,13 @@ export default function PimpinanDashboardPage() {
   useEffect(() => { load() }, [load])
 
   // Tren bulanan 1 tahun: realisasi per bulan (naik-turun) + garis kumulatif.
+  // Sumbu selalu Januari–Desember (bulan yang belum ada datanya = 0).
   // WAJIB di atas early-return agar urutan hooks stabil (aturan React).
   const trendData = useMemo(() => {
     const ms = data?.achievement?.monthly || []
     const short = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
     let cp = 0, cl = 0
-    return ms.map((m, i) => {
+    const rows = ms.map((m, i) => {
       const mp = Number(m.cumPeserta) || 0
       const ml = Number(m.cumLulusan) || 0
       const row = {
@@ -65,6 +66,10 @@ export default function PimpinanDashboardPage() {
       cl = ml
       return row
     })
+    while (rows.length < 12) {
+      rows.push({ label: short[rows.length], peserta: 0, lulusan: 0, kumPeserta: cp, kumLulusan: cl })
+    }
+    return rows
   }, [data])
   const trendTotal = trendData.reduce((s, r) => s + r.peserta + r.lulusan, 0)
 
@@ -394,7 +399,12 @@ function MonthlyTrendChart({ data }) {
   const cx = (i) => padL + i * gw + gw / 2
   const y = (v) => padT + plotH - (Math.max(0, v) / maxV) * plotH
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxV * f))
-  const line = (key, color) => data.map((r, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
+  const line = (key) => data.map((r, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
+  const base = padT + plotH
+  const area = (key) => {
+    if (!data.length) return ''
+    return `${line(key)} L${cx(data.length - 1).toFixed(1)},${base} L${cx(0).toFixed(1)},${base} Z`
+  }
 
   return (
     <div>
@@ -421,6 +431,8 @@ function MonthlyTrendChart({ data }) {
             </text>
           </g>
         ))}
+        <path d={area('kumPeserta')} fill="#0284C7" fillOpacity={0.08} />
+        <path d={area('kumLulusan')} fill="#10B981" fillOpacity={0.08} />
         {data.map((r, i) => (
           <g key={r.label}>
             <rect x={cx(i) - barW - 1.5} y={y(r.peserta)} width={barW} height={Math.max(0, padT + plotH - y(r.peserta))} rx={3} fill="#16314E">
