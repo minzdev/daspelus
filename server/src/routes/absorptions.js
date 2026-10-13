@@ -1841,6 +1841,8 @@ router.post('/admin/review', async (req, res) => {
     await sub.save();
 
     const uptDoc = await Upt.findByPk(sub.uptId);
+    // Label periode mengikuti data: "Bulan X" untuk laporan bulanan, triwulan untuk data lama
+    const periodLabel = periodNameOf(sub);
     if (action === 'approve') {
       await notifier.sendNotification({
         recipientRole: 'UPT_ADMIN',
@@ -1848,11 +1850,11 @@ router.post('/admin/review', async (req, res) => {
         senderId: req.user.id,
         senderName: req.user.name || req.user.email,
         title: `Laporan Penyerapan Disahkan BPSDMP`,
-        message: `Laporan Penyerapan Lulusan Triwulan ${sub.quarter} Tahun ${sub.year} telah disahkan dan dikunci secara nasional oleh Admin BPSDMP.`,
+        message: `Laporan Penyerapan Lulusan ${periodLabel} Tahun ${sub.year} telah disahkan dan dikunci secara nasional oleh Admin BPSDMP.`,
         category: 'approval',
         type: 'penyerapan',
         link: '/upt/penyerapan',
-        metadata: { uptId: sub.uptId, year: sub.year, quarter: sub.quarter },
+        metadata: { uptId: sub.uptId, year: sub.year, quarter: sub.quarter, month: sub.month || null },
       });
       await notifier.sendNotification({
         recipientRole: 'PIMPINAN_UPT',
@@ -1860,11 +1862,11 @@ router.post('/admin/review', async (req, res) => {
         senderId: req.user.id,
         senderName: req.user.name || req.user.email,
         title: `Laporan Penyerapan Disetujui BPSDMP`,
-        message: `Laporan Penyerapan Triwulan ${sub.quarter} Tahun ${sub.year} untuk ${uptDoc?.name || 'UPT'} telah disahkan final oleh Admin BPSDMP.`,
+        message: `Laporan Penyerapan ${periodLabel} Tahun ${sub.year} untuk ${uptDoc?.name || 'UPT'} telah disahkan final oleh Admin BPSDMP.`,
         category: 'approval',
         type: 'penyerapan',
         link: '/pimpinan/persetujuan?category=penyerapan',
-        metadata: { uptId: sub.uptId, year: sub.year, quarter: sub.quarter },
+        metadata: { uptId: sub.uptId, year: sub.year, quarter: sub.quarter, month: sub.month || null },
       });
     } else {
       await notifier.sendNotification({
@@ -1873,11 +1875,11 @@ router.post('/admin/review', async (req, res) => {
         senderId: req.user.id,
         senderName: req.user.name || req.user.email,
         title: `Laporan Penyerapan Ditolak BPSDMP`,
-        message: `Laporan Penyerapan Triwulan ${sub.quarter} Tahun ${sub.year} dikembalikan oleh Admin BPSDMP. Catatan: ${notes || '-'}`,
+        message: `Laporan Penyerapan ${periodLabel} Tahun ${sub.year} dikembalikan oleh Admin BPSDMP. Catatan: ${notes || '-'}`,
         category: 'rejection',
         type: 'penyerapan',
         link: '/upt/penyerapan/input',
-        metadata: { uptId: sub.uptId, year: sub.year, quarter: sub.quarter, notes },
+        metadata: { uptId: sub.uptId, year: sub.year, quarter: sub.quarter, month: sub.month || null, notes },
       });
     }
 

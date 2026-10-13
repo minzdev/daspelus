@@ -55,8 +55,11 @@ const AbsorptionSubmission = sequelize.define(
     tableName: 'absorption_submissions',
     indexes: [
       {
+        // Laporan kini BULANAN: unik per bulan. month NULL (era triwulan)
+        // dianggap distinct oleh MySQL sehingga data lama tetap valid.
         unique: true,
-        fields: ['upt_id', 'year', 'quarter'],
+        fields: ['upt_id', 'year', 'month'],
+        name: 'uniq_abs_sub_upt_year_month',
       },
     ],
   }

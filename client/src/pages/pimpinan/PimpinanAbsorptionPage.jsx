@@ -6,13 +6,22 @@ import {
   IconGraduation, IconCheck, IconX, IconChevronDown, IconEye,
 } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
-import { yearOptions, fmtNum } from '../../utils/format'
+import { yearOptions, fmtNum, MONTHS } from '../../utils/format'
 import { useToast } from '../../components/Toast'
+
+// Label periode: bulanan untuk data baru, triwulan untuk data lama
+function periodLabelOf(sub) {
+  if (!sub) return '-'
+  if (sub.periodName) return sub.periodName
+  if (sub.month) return `Bulan ${MONTHS[Number(sub.month) - 1]}`
+  return sub.quarterName || (sub.quarter ? `Triwulan ${sub.quarter}` : '-')
+}
 
 export default function PimpinanAbsorptionPage() {
   const { user } = useAuth()
   const toast = useToast()
   const [year, setYear] = useState(new Date().getFullYear())
+  const [monthFilter, setMonthFilter] = useState('all')
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -24,9 +33,24 @@ export default function PimpinanAbsorptionPage() {
   const [processing, setProcessing] = useState(false)
 
   // Preview Data State
-  const [previewQuarter, setPreviewQuarter] = useState(null)
+  const [previewSub, setPreviewSub] = useState(null)
   const [previewData, setPreviewData] = useState(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+
+  // Urut terbaru dulu + saring per bulan (data lama triwulan ikut di bulan-bulannya)
+  const visibleSubmissions = (submissions || [])
+    .filter((s) => {
+      if (monthFilter === 'all') return true
+      const m = Number(monthFilter)
+      if (Number(s.month) === m) return true
+      if ((s.month === null || s.month === undefined) && Number(s.quarter) === Math.ceil(m / 3)) return true
+      return false
+    })
+    .sort((a, b) => {
+      const ka = a.month ? Number(a.month) : Number(a.quarter || 0) * 3
+      const kb = b.month ? Number(b.month) : Number(b.quarter || 0) * 3
+      return kb - ka
+    })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -46,10 +70,12 @@ export default function PimpinanAbsorptionPage() {
   }, [load])
 
   const openPreview = async (sub) => {
-    setPreviewQuarter(sub.quarter)
+    setPreviewSub(sub)
     setLoadingPreview(true)
     try {
-      const { data: res } = await api.get('/absorptions/my', { params: { year, quarter: sub.quarter } })
+      // Bulanan bila pengajuan punya bulan; triwulan hanya untuk data lama
+      const params = sub.month ? { year, month: sub.month } : { year, quarter: sub.quarter }
+      const { data: res } = await api.get('/absorptions/my', { params })
       setPreviewData(res)
     } catch (err) {
       toast.error(apiError(err))
@@ -93,7 +119,7 @@ export default function PimpinanAbsorptionPage() {
                 Persetujuan Penyerapan Lulusan
               </h1>
               <p className="text-xs text-navy-200 mt-0.5">
-                <strong className="text-white">{user?.upt?.name || 'UPT'}</strong> — Verifikasi dan persetujuan laporan penyerapan taruna lulusan per triwulan.
+                <strong className="text-white">{user?.upt?.name || 'UPT'}</strong> — Verifikasi dan persetujuan laporan penyerapan taruna lulusan per bulan.
               </p>
             </div>
           </div>
@@ -119,21 +145,41 @@ export default function PimpinanAbsorptionPage() {
 
       {/* List Submissions */}
       <div className="card p-5 border-surface-border shadow-card space-y-4">
-        <h2 className="text-sm font-black text-navy-900 uppercase tracking-wide">
-          Pengajuan Laporan Penyerapan Triwulanan ({year})
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-sm font-black text-navy-900 uppercase tracking-wide">
+            Pengajuan Laporan Penyerapan Bulanan ({year})
+          </h2>
+          <div className="relative shrink-0">
+            <select
+              className="appearance-none cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl py-2 pl-3 pr-8 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              title="Saring pengajuan per bulan"
+            >
+              <option value="all">Semua Bulan</option>
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>{m}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+              <IconChevronDown className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
 
         {loading ? (
           <SkeletonRows rows={4} />
-        ) : submissions.length === 0 ? (
+        ) : visibleSubmissions.length === 0 ? (
           <EmptyState
             icon={<IconGraduation className="h-7 w-7" />}
             title="Belum Ada Pengajuan Penyerapan"
-            desc={`Admin UPT belum mengirimkan laporan penyerapan lulusan untuk Tahun ${year}.`}
+            desc={monthFilter === 'all'
+              ? `Admin UPT belum mengirimkan laporan penyerapan lulusan untuk Tahun ${year}.`
+              : `Tidak ada pengajuan untuk Bulan ${MONTHS[Number(monthFilter) - 1]} ${year}.`}
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {submissions.map((sub) => {
+            {visibleSubmissions.map((sub) => {
               const isPending = sub.status === 'submitted_pimpinan'
               const isAppr = sub.status === 'approved_pimpinan'
               const isRej = sub.status === 'rejected_pimpinan'
@@ -175,7 +221,7 @@ export default function PimpinanAbsorptionPage() {
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <h3 className="text-base font-black text-navy-950">{sub.quarterName}</h3>
+                      <h3 className="text-base font-black text-navy-950">{periodLabelOf(sub)}</h3>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {fmtNum(sub.recordsCount)} data taruna dilaporkan
                       </p>
@@ -245,7 +291,7 @@ export default function PimpinanAbsorptionPage() {
               </h3>
               <p className="text-xs text-slate-600">
                 {actionType === 'approve'
-                  ? `Anda akan menyetujui data penyerapan ${selectedSub.quarterName} Tahun ${year}.`
+                  ? `Anda akan menyetujui data penyerapan ${periodLabelOf(selectedSub)} Tahun ${year}.`
                   : `Berikan catatan perbaikan agar Admin UPT dapat memperbaiki data yang belum sesuai.`}
               </p>
 
@@ -287,20 +333,20 @@ export default function PimpinanAbsorptionPage() {
       )}
 
       {/* MODAL PREVIEW DETAIL DATA TARUNA */}
-      {previewQuarter && (
+      {previewSub && (
         <div className="modal-overlay">
           <div className="modal-flex">
             <div className="modal-panel max-w-4xl p-6 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-surface-border">
                 <div>
                   <h3 className="text-base font-black text-navy-900">
-                    Rincian Penyerapan Triwulan {previewQuarter} ({year})
+                    Rincian Penyerapan {periodLabelOf(previewSub)} ({year})
                   </h3>
                   <p className="text-xs text-slate-500">
                     Total Lulusan: {fmtNum(previewData?.summary?.totalLulusan || 0)} · Bekerja: {fmtNum(previewData?.summary?.totalBekerja || 0)} ({previewData?.summary?.pctAbsorption || 0}%)
                   </p>
                 </div>
-                <button type="button" className="text-slate-400 hover:text-slate-600 text-sm" onClick={() => setPreviewQuarter(null)}>✕</button>
+                <button type="button" className="text-slate-400 hover:text-slate-600 text-sm" onClick={() => setPreviewSub(null)}>✕</button>
               </div>
 
               {loadingPreview ? (
@@ -333,7 +379,7 @@ export default function PimpinanAbsorptionPage() {
               )}
 
               <div className="pt-2 text-right">
-                <button type="button" className="btn-secondary !text-xs !py-1.5 !px-3" onClick={() => setPreviewQuarter(null)}>
+                <button type="button" className="btn-secondary !text-xs !py-1.5 !px-3" onClick={() => setPreviewSub(null)}>
                   Tutup
                 </button>
               </div>

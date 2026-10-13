@@ -116,6 +116,26 @@ async function start() {
       await sequelize.query("ALTER TABLE `absorption_submissions` ADD UNIQUE INDEX `uniq_abs_sub_upt_year_month` (`upt_id`, `year`, `month`);");
       console.log("[db] Unique index penyerapan bulanan dibuat.");
     }
+    // Hapus unique index era triwulan (upt, tahun, quarter) bila masih ada agar
+    // 2 bulan dalam triwulan yang sama tidak saling memblokir (laporan kini bulanan)
+    try {
+      const [allIdx] = await sequelize.query("SHOW INDEX FROM `absorption_submissions`");
+      const byKey = new Map();
+      for (const r of allIdx || []) {
+        if (Number(r.Non_unique) !== 0 || r.Key_name === "PRIMARY" || r.Key_name === "uniq_abs_sub_upt_year_month") continue;
+        if (!byKey.has(r.Key_name)) byKey.set(r.Key_name, []);
+        byKey.get(r.Key_name).push(r.Column_name);
+      }
+      for (const [name, cols] of byKey.entries()) {
+        const set = new Set(cols);
+        if (set.size === 3 && set.has("upt_id") && set.has("year") && set.has("quarter")) {
+          await sequelize.query(`ALTER TABLE \`absorption_submissions\` DROP INDEX \`${name}\`;`);
+          console.log(`[db] Unique index triwulan '${name}' dihapus (penyerapan kini bulanan).`);
+        }
+      }
+    } catch (e) {
+      console.warn("[db] cek/drop unique index triwulan:", e.message);
+    }
 
     // Pastikan kolom target_by_program ada di tabel diklats (untuk target independen per program)
     try {

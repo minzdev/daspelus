@@ -6,14 +6,7 @@ import {
   IconTarget, IconBuilding, IconPeople, IconGraduation, IconCheck, IconChevronDown, IconFileText,
 } from '../../components/icons'
 import logoBpsdm from '../../assets/logo-bpsdm.png'
-import { fmtNum, yearOptions } from '../../utils/format'
-
-const QUARTER_NAMES = {
-  1: 'Triwulan I (Jan - Mar)',
-  2: 'Triwulan II (Apr - Jun)',
-  3: 'Triwulan III (Jul - Sep)',
-  4: 'Triwulan IV (Okt - Des)',
-}
+import { fmtNum, yearOptions, MONTHS } from '../../utils/format'
 
 const TARUNA_STATUS_LABELS = {
   draft: { label: 'Draf UPT', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
@@ -60,9 +53,19 @@ export default function PimpinanDashboardPage() {
   const pendingTaruna = data.pendingTarunaCount || 0
   const pendingAbsorption = data.pendingAbsorptionCount || 0
 
-  // Quick lookup for taruna and absorption submissions per quarter
-  const tarunaSubMap = new Map((data.tarunaSubmissions || []).map((s) => [s.quarter, s]))
-  const absSubMap = new Map((data.absorptionSubmissions || []).map((s) => [s.quarter, s]))
+  // Master Data Taruna bersifat tahunan (1 pengajuan/tahun, berlaku 12 bulan)
+  const tarunaYearly = (data.tarunaSubmissions || [])[0] || null
+  // Laporan penyerapan per bulan; data lama era triwulan dirujuk di tiap bulannya
+  const absByMonth = new Map()
+  for (const s of data.absorptionSubmissions || []) {
+    if (s.month) {
+      if (!absByMonth.has(Number(s.month))) absByMonth.set(Number(s.month), s)
+    } else if (s.quarter) {
+      for (let m = (Number(s.quarter) - 1) * 3 + 1; m <= Number(s.quarter) * 3; m++) {
+        if (!absByMonth.has(m)) absByMonth.set(m, s)
+      }
+    }
+  }
 
   return (
     <div className="animate-fadeUp space-y-6">
@@ -154,7 +157,7 @@ export default function PimpinanDashboardPage() {
               Persetujuan Modul Penyerapan Lulusan ({year})
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Status verifikasi Master Data Taruna dan Persetujuan Laporan Penyerapan Lulusan Triwulanan.
+              Status verifikasi Master Data Taruna (tahunan) dan Persetujuan Laporan Penyerapan Lulusan per bulan.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -179,29 +182,30 @@ export default function PimpinanDashboardPage() {
           </div>
         </div>
 
-        {/* Tabel Triwulan Modul 2 */}
+        {/* Tabel Bulanan Modul 2 */}
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full border-collapse text-left text-xs text-slate-800">
             <thead>
               <tr className="bg-navy-950 text-white font-extrabold uppercase text-[10px]">
-                <th className="px-4 py-3">TRIWULAN</th>
+                <th className="px-4 py-3">BULAN</th>
                 <th className="px-4 py-3">1. MASTER DATA TARUNA</th>
-                <th className="px-4 py-3">2. LAPORAN PENYERAPAN (TW)</th>
+                <th className="px-4 py-3">2. LAPORAN PENYERAPAN (BULAN)</th>
                 <th className="px-4 py-3 text-center">AKSI PIMPINAN</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {[1, 2, 3, 4].map((q) => {
-                const tSub = tarunaSubMap.get(q)
-                const aSub = absSubMap.get(q)
+              {MONTHS.map((mName, idx) => {
+                const m = idx + 1
+                const tSub = tarunaYearly
+                const aSub = absByMonth.get(m)
 
                 const tStatus = tSub ? (TARUNA_STATUS_LABELS[tSub.status] || { label: tSub.status, cls: 'bg-slate-100 text-slate-600' }) : { label: 'Belum Ada Pengajuan', cls: 'bg-slate-100 text-slate-500' }
                 const aStatus = aSub ? (ABS_STATUS_LABELS[aSub.status] || { label: aSub.status, cls: 'bg-slate-100 text-slate-600' }) : { label: 'Belum Ada Pengajuan', cls: 'bg-slate-100 text-slate-500' }
 
                 return (
-                  <tr key={q} className="hover:bg-slate-50/70 transition-colors">
+                  <tr key={m} className="hover:bg-slate-50/70 transition-colors">
                     <td className="px-4 py-3.5 font-extrabold text-navy-950">
-                      {QUARTER_NAMES[q]}
+                      {mName}
                     </td>
 
                     {/* Status Data Taruna */}

@@ -76,11 +76,12 @@ const PUSBANG_NAV = [
   },
 ]
 
+// Menu Pimpinan UPT — label disamakan dengan Admin UPT agar sinkron.
 const PIMPINAN_NAV = [
   {
     section: 'Utama',
     items: [
-      { to: '/pimpinan', label: 'Dashboard', icon: IconDashboard, end: true },
+      { to: '/pimpinan', label: 'Dashboard Realisasi', icon: IconDashboard, end: true },
     ],
   },
   {
@@ -92,9 +93,9 @@ const PIMPINAN_NAV = [
   {
     section: 'Laporan & Riwayat',
     items: [
-      { to: '/pimpinan/laporan', label: 'Laporan Realisasi PK', icon: IconChart },
-      { to: '/pimpinan/penyerapan/laporan', label: 'Laporan Penyerapan Bulanan', icon: IconFileText },
-      { to: '/pimpinan/riwayat', label: 'Riwayat UPT', icon: IconHistory },
+      { to: '/pimpinan/laporan', label: 'Laporan Realisasi', icon: IconChart },
+      { to: '/pimpinan/penyerapan/laporan', label: 'Laporan Penyerapan (Bulanan)', icon: IconFileText },
+      { to: '/pimpinan/riwayat', label: 'Riwayat Input', icon: IconHistory },
     ],
   },
 ]
