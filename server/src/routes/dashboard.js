@@ -9,40 +9,107 @@ const router = express.Router();
 router.use(authenticate);
 
 /**
- * Gabungkan target semua program menjadi target per UPT.
- * SINGLE-INPUT: dokumen month=0 adalah target tahunan kanonis (bukan bulan ke-0).
- * monthly hanya berisi bulan 1-12; total tahunan = monthly + single.
+ * Gabungkan target semua program menjadi target per UPT — KANONIS & SINKRON
+ * dengan halaman laporan (reports.js) agar angka di semua dashboard valid:
+ * - Dokumen month=0 (single-input, nilai terbaru) adalah acuan per program;
+ *   sisa dokumen bulanan lama hanya dipakai bila program tak punya dokumen
+ *   tahunan (per field).
+ * - Induk yang punya turunan = jumlah turunan; dokumen Target induk yang
+ *   tersisa/ganda diabaikan dan TIDAK ikut total (anti 219→429).
+ * - `monthly` hanya berisi rincian bulanan program yang murni-bulanan;
+ *   total tahunan = jumlah kanonis program non-induk (tiap program 1×).
  * computeAchievement memakai mode tahunan (proporsional) bila monthly kosong.
  */
-function buildUptTargets(targetDocs) {
-  const byUpt = new Map();
+function buildUptTargets(targetDocs, allPrograms = []) {
+  const childrenOf = new Map();
+  for (const p of allPrograms) {
+    const pid = String(p.id);
+    const par = p.parentId ? String(p.parentId) : null;
+    if (!par) continue;
+    if (!childrenOf.has(par)) childrenOf.set(par, []);
+    childrenOf.get(par).push(pid);
+  }
+  const isParent = (pid) => childrenOf.has(String(pid));
+
+  const annual = new Map(); // `${uptId}|${progId}` -> {tp,tl} (month=0)
+  const monthlySum = new Map(); // sisa bulanan lama
+  const monthlyDetail = new Map(); // key -> Map(month->{tp,tl})
+  const uptIds = new Set();
   for (const t of targetDocs) {
     if (!t.programId || t.month == null) continue;
-    const mNum = Number(t.month);
-    if (!byUpt.has(t.uptId)) byUpt.set(t.uptId, { monthMap: new Map(), singleTp: 0, singleTl: 0 });
-    const entry = byUpt.get(t.uptId);
-    if (mNum === 0) {
-      entry.singleTp += Number(t.targetPeserta) || 0;
-      entry.singleTl += Number(t.targetLulusan) || 0;
+    const uid = String(t.uptId);
+    uptIds.add(uid);
+    const key = `${uid}|${t.programId}`;
+    const tp = Number(t.targetPeserta) || 0;
+    const tl = Number(t.targetLulusan) || 0;
+    if (Number(t.month) === 0) {
+      const prev = annual.get(key) || { tp: 0, tl: 0 };
+      annual.set(key, { tp: prev.tp + tp, tl: prev.tl + tl });
     } else {
-      const prev = entry.monthMap.get(mNum) || { tp: 0, tl: 0 };
-      entry.monthMap.set(mNum, {
-        tp: prev.tp + (Number(t.targetPeserta) || 0),
-        tl: prev.tl + (Number(t.targetLulusan) || 0),
-      });
+      const prev = monthlySum.get(key) || { tp: 0, tl: 0 };
+      monthlySum.set(key, { tp: prev.tp + tp, tl: prev.tl + tl });
+      if (!monthlyDetail.has(key)) monthlyDetail.set(key, new Map());
+      const mm = monthlyDetail.get(key);
+      const mNum = Number(t.month);
+      const e = mm.get(mNum) || { tp: 0, tl: 0 };
+      mm.set(mNum, { tp: e.tp + tp, tl: e.tl + tl });
     }
   }
+
+  // Kanonis per program (per field): tahunan dulu, lalu bulanan lama.
+  const canon = new Map();
+  for (const key of new Set([...annual.keys(), ...monthlySum.keys()])) {
+    const a = annual.get(key) || { tp: 0, tl: 0 };
+    const m = monthlySum.get(key) || { tp: 0, tl: 0 };
+    canon.set(key, { tp: a.tp > 0 ? a.tp : m.tp, tl: a.tl > 0 ? a.tl : m.tl });
+  }
+  // Induk berturunan = jumlah turunan — hanya bila turunan bernilai agar
+  // input langsung induk (tanpa rincian) tidak hilang.
+  for (const uid of uptIds) {
+    for (const [parId, kids] of childrenOf.entries()) {
+      let tp = 0, tl = 0;
+      for (const kid of kids) {
+        const c = canon.get(`${uid}|${kid}`);
+        if (c) { tp += c.tp; tl += c.tl; }
+      }
+      if (tp + tl > 0) canon.set(`${uid}|${parId}`, { tp, tl });
+    }
+  }
+
   const out = new Map();
-  for (const [uptId, entry] of byUpt.entries()) {
-    const monthly = [...entry.monthMap.entries()]
+  for (const uid of uptIds) {
+    const monthMap = new Map();
+    let singleTp = 0, singleTl = 0, leafTp = 0, leafTl = 0;
+    for (const [key, c] of canon.entries()) {
+      const sep = key.indexOf("|");
+      if (key.slice(0, sep) !== uid) continue;
+      const pid = key.slice(sep + 1);
+      if (isParent(pid)) continue; // induk tidak masuk total (anti ganda)
+      leafTp += c.tp;
+      leafTl += c.tl;
+      const a = annual.get(key);
+      if (a && a.tp + a.tl > 0) {
+        singleTp += a.tp;
+        singleTl += a.tl;
+      } else {
+        const mm = monthlyDetail.get(key);
+        if (mm) {
+          for (const [mNum, e] of mm.entries()) {
+            const prev = monthMap.get(mNum) || { tp: 0, tl: 0 };
+            monthMap.set(mNum, { tp: prev.tp + e.tp, tl: prev.tl + e.tl });
+          }
+        }
+      }
+    }
+    const monthly = [...monthMap.entries()]
       .map(([month, v]) => ({ month, targetPeserta: v.tp, targetLulusan: v.tl }))
       .sort((a, b) => a.month - b.month);
-    out.set(uptId, {
+    out.set(uid, {
       monthly,
-      targetPeserta: monthly.reduce((s, m) => s + m.targetPeserta, 0) + entry.singleTp,
-      targetLulusan: monthly.reduce((s, m) => s + m.targetLulusan, 0) + entry.singleTl,
-      singlePeserta: entry.singleTp,
-      singleLulusan: entry.singleTl,
+      targetPeserta: leafTp,
+      targetLulusan: leafTl,
+      singlePeserta: singleTp,
+      singleLulusan: singleTl,
     });
   }
   return out;
@@ -52,12 +119,13 @@ function buildUptTargets(targetDocs) {
 router.get("/admin", requireAdmin, async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
   try {
-    const [targetDocs, realDocs, upts, users, subDocs] = await Promise.all([
+    const [targetDocs, realDocs, upts, users, subDocs, progDocs] = await Promise.all([
       Target.findAll({ where: { year } }),
       Realization.findAll({ where: { year } }),
       Upt.findAll(),
       User.findAll({ where: { role: { [Op.in]: ["UPT_ADMIN", "PIMPINAN_UPT"] } } }),
       Submission.findAll({ where: { year } }),
+      Program.findAll(),
     ]);
 
     // Approved months map
@@ -81,7 +149,7 @@ router.get("/admin", requireAdmin, async (req, res) => {
       realByUpt.get(r.uptId).push(r);
     }
 
-    const targetByUpt = buildUptTargets(targetDocs.map((t) => t.toJSON()));
+    const targetByUpt = buildUptTargets(targetDocs.map((t) => t.toJSON()), progDocs.map((p) => p.toJSON()));
 
     // Grafik bulanan
     const monthlySeries = Array.from({ length: 12 }, (_, i) => ({
@@ -212,18 +280,19 @@ router.get("/pimpinan", requirePimpinan, async (req, res) => {
     const uptId = req.user.uptId;
     if (!uptId) return res.status(400).json({ error: "Akun belum tertaut ke UPT." });
 
-    const [targetDocs, realDocs, uptDoc, subDocs, tarunaSubDocs, absorptionSubDocs] = await Promise.all([
+    const [targetDocs, realDocs, uptDoc, subDocs, tarunaSubDocs, absorptionSubDocs, progDocs] = await Promise.all([
       Target.findAll({ where: { uptId, year } }),
       Realization.findAll({ where: { uptId, year } }),
       Upt.findByPk(uptId),
       Submission.findAll({ where: { uptId, year } }),
       TarunaSubmission.findAll({ where: { uptId, year } }),
       AbsorptionSubmission.findAll({ where: { uptId, year } }),
+      Program.findAll(),
     ]);
     if (!uptDoc) return res.status(404).json({ error: "UPT tidak ditemukan." });
 
     const approvedSet = new Set(subDocs.filter((s) => s.status === "approved").map((s) => Number(s.month)));
-    const targetByUpt = buildUptTargets(targetDocs.map((t) => t.toJSON()));
+    const targetByUpt = buildUptTargets(targetDocs.map((t) => t.toJSON()), progDocs.map((p) => p.toJSON()));
     const target = targetByUpt.get(uptId) || null;
 
     const reals = realDocs.map((r) => r.toJSON())
@@ -262,13 +331,14 @@ router.get("/pusbang", requirePusbang, async (req, res) => {
     const matra = (req.user.pusbangMatra || "").toLowerCase();
     if (!matra) return res.status(400).json({ error: "Pusbang belum memiliki matra." });
 
-    const [targetDocs, realDocs, uptDocs, subDocs, pendingUnlockCount, gradRecords] = await Promise.all([
+    const [targetDocs, realDocs, uptDocs, subDocs, pendingUnlockCount, gradRecords, progDocs] = await Promise.all([
       Target.findAll({ where: { year } }),
       Realization.findAll({ where: { year } }),
       Upt.findAll({ where: { matra } }),
       Submission.findAll({ where: { matra, year } }),
       UnlockRequest.count({ where: { matra, status: "pending_pusbang" } }),
       GradAbsorption.findAll({ where: { year } }),
+      Program.findAll(),
     ]);
 
     const approvedMap = new Map();
@@ -290,7 +360,7 @@ router.get("/pusbang", requirePusbang, async (req, res) => {
       if (!realByUpt.has(r.uptId)) realByUpt.set(r.uptId, []);
       realByUpt.get(r.uptId).push(r);
     }
-    const targetByUpt = buildUptTargets(targetDocs.map((t) => t.toJSON()));
+    const targetByUpt = buildUptTargets(targetDocs.map((t) => t.toJSON()), progDocs.map((p) => p.toJSON()));
 
     const now = new Date();
     const upTo = year === now.getFullYear() ? now.getMonth() + 1 : 12;

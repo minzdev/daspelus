@@ -113,6 +113,8 @@ export default function PimpinanDashboardPage() {
           value={fmtNum(ach?.targetPeserta || 0)}
           sub={`Realisasi: ${fmtNum(ach?.totalPeserta || 0)}`}
           tone="navy"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconTarget className="h-5 w-5" />}
@@ -120,6 +122,8 @@ export default function PimpinanDashboardPage() {
           value={fmtNum(ach?.targetLulusan || 0)}
           sub={`Realisasi: ${fmtNum(ach?.totalLulusan || 0)}`}
           tone="gold"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
           icon={<IconPeople className="h-5 w-5" />}
@@ -127,6 +131,8 @@ export default function PimpinanDashboardPage() {
           value={pendingTaruna > 0 ? `${pendingTaruna} Pending` : 'Terverifikasi'}
           sub={pendingTaruna > 0 ? 'Menunggu verifikasi Anda' : 'Semua pengajuan diproses'}
           tone={pendingTaruna > 0 ? 'gold' : 'emerald'}
+          labelClass="!font-extrabold"
+          valueClass="!text-[22px] !font-black !leading-tight"
         />
         <StatCard
           icon={<IconGraduation className="h-5 w-5" />}
@@ -134,6 +140,8 @@ export default function PimpinanDashboardPage() {
           value={pendingAbsorption > 0 ? `${pendingAbsorption} Pending` : 'Terverifikasi'}
           sub={pendingAbsorption > 0 ? 'Menunggu persetujuan Anda' : 'Semua laporan diproses'}
           tone={pendingAbsorption > 0 ? 'gold' : 'emerald'}
+          labelClass="!font-extrabold"
+          valueClass="!text-[22px] !font-black !leading-tight"
         />
       </div>
 
