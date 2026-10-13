@@ -48,25 +48,10 @@ export default function PimpinanDashboardPage() {
 
   useEffect(() => { load() }, [load])
 
-  if (loading) return <div className="p-4"><SkeletonRows rows={4} /></div>
-  if (error) return <Alert type="error">{error}</Alert>
-  if (!data) return null
-
-  const ach = data.achievement
-  const pendingTaruna = data.pendingTarunaCount || 0
-  const pendingAbsorption = data.pendingAbsorptionCount || 0
-
-  // % capaian per kelompok (sama seperti halaman Laporan Realisasi)
-  const pctText = (real, target) => {
-    const r = Number(real) || 0
-    const t = Number(target) || 0
-    if (!t || t <= 0) return '-'
-    return `${Math.round((r / t) * 100)}%`
-  }
-
-  // Tren bulanan 1 tahun: realisasi per bulan (naik-turun) + garis kumulatif
+  // Tren bulanan 1 tahun: realisasi per bulan (naik-turun) + garis kumulatif.
+  // WAJIB di atas early-return agar urutan hooks stabil (aturan React).
   const trendData = useMemo(() => {
-    const ms = ach?.monthly || []
+    const ms = data?.achievement?.monthly || []
     const short = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
     let cp = 0, cl = 0
     return ms.map((m, i) => {
@@ -83,8 +68,24 @@ export default function PimpinanDashboardPage() {
       cl = ml
       return row
     })
-  }, [ach])
+  }, [data])
   const trendTotal = trendData.reduce((s, r) => s + r.peserta + r.lulusan, 0)
+
+  if (loading) return <div className="p-4"><SkeletonRows rows={4} /></div>
+  if (error) return <Alert type="error">{error}</Alert>
+  if (!data) return null
+
+  const ach = data.achievement
+  const pendingTaruna = data.pendingTarunaCount || 0
+  const pendingAbsorption = data.pendingAbsorptionCount || 0
+
+  // % capaian per kelompok (sama seperti halaman Laporan Realisasi)
+  const pctText = (real, target) => {
+    const r = Number(real) || 0
+    const t = Number(target) || 0
+    if (!t || t <= 0) return '-'
+    return `${Math.round((r / t) * 100)}%`
+  }
 
   // Master Data Taruna bersifat tahunan (1 pengajuan/tahun, berlaku 12 bulan)
   const tarunaYearly = (data.tarunaSubmissions || [])[0] || null
