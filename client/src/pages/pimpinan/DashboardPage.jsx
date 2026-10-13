@@ -53,6 +53,14 @@ export default function PimpinanDashboardPage() {
   const pendingTaruna = data.pendingTarunaCount || 0
   const pendingAbsorption = data.pendingAbsorptionCount || 0
 
+  // % capaian per kelompok (sama seperti halaman Laporan Realisasi)
+  const pctText = (real, target) => {
+    const r = Number(real) || 0
+    const t = Number(target) || 0
+    if (!t || t <= 0) return '-'
+    return `${Math.round((r / t) * 100)}%`
+  }
+
   // Master Data Taruna bersifat tahunan (1 pengajuan/tahun, berlaku 12 bulan)
   const tarunaYearly = (data.tarunaSubmissions || [])[0] || null
   // Laporan penyerapan per bulan; data lama era triwulan dirujuk di tiap bulannya
@@ -108,7 +116,7 @@ export default function PimpinanDashboardPage() {
         </div>
       </div>
 
-      {/* Overview Stat Cards */}
+      {/* Overview Stat Cards — Target, Realisasi & Capaian (sinkron dgn Laporan Realisasi) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<IconTarget className="h-5 w-5" />}
@@ -120,11 +128,43 @@ export default function PimpinanDashboardPage() {
           valueClass="!text-[28px] !font-black !leading-none"
         />
         <StatCard
+          icon={<IconPeople className="h-5 w-5" />}
+          label="Realisasi Peserta"
+          value={fmtNum(ach?.totalPeserta || 0)}
+          tone="sky"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
+        />
+        <StatCard
+          icon={<IconTarget className="h-5 w-5" />}
+          label="Capaian Peserta"
+          value={pctText(ach?.totalPeserta, ach?.targetPeserta)}
+          tone="emerald"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
+        />
+        <StatCard
           icon={<IconTarget className="h-5 w-5" />}
           label="Target Lulusan PK"
           value={fmtNum(ach?.targetLulusan || 0)}
           sub={`Realisasi: ${fmtNum(ach?.totalLulusan || 0)}`}
           tone="gold"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
+        />
+        <StatCard
+          icon={<IconGraduation className="h-5 w-5" />}
+          label="Realisasi Lulusan"
+          value={fmtNum(ach?.totalLulusan || 0)}
+          tone="sky"
+          labelClass="!font-extrabold"
+          valueClass="!text-[28px] !font-black !leading-none"
+        />
+        <StatCard
+          icon={<IconGraduation className="h-5 w-5" />}
+          label="Capaian Lulusan"
+          value={pctText(ach?.totalLulusan, ach?.targetLulusan)}
+          tone="emerald"
           labelClass="!font-extrabold"
           valueClass="!text-[28px] !font-black !leading-none"
         />
