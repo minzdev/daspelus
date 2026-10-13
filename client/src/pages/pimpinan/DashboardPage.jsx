@@ -116,8 +116,8 @@ export default function PimpinanDashboardPage() {
         </div>
       </div>
 
-      {/* Overview Stat Cards — Target, Realisasi & Capaian (sinkron dgn Laporan Realisasi) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Overview Stat Cards — trio Peserta, trio Lulusan, lalu persetujuan */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           icon={<IconTarget className="h-5 w-5" />}
           label="Target Peserta PK"
