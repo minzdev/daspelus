@@ -233,6 +233,30 @@ export default function PimpinanDashboardPage() {
         </div>
       </div>
 
+      {/* Diagram Bulat: Realisasi vs Target PK (Capaian %) */}
+      <div className="card flex flex-col">
+        <div className="card-header border-b border-surface-border pb-4">
+          <div>
+            <h3 className="card-title">Capaian vs Target PK {year}</h3>
+            <p className="card-subtitle">Perbandingan realisasi terhadap target PK per kelompok</p>
+          </div>
+        </div>
+        <div className="p-4 sm:p-5 grid gap-4 sm:grid-cols-2">
+          <AchievementDonut
+            label="Peserta"
+            target={ach?.targetPeserta || 0}
+            real={ach?.totalPeserta || 0}
+            color="#0284C7"
+          />
+          <AchievementDonut
+            label="Lulusan"
+            target={ach?.targetLulusan || 0}
+            real={ach?.totalLulusan || 0}
+            color="#10B981"
+          />
+        </div>
+      </div>
+
       {/* MODUL 2: Persetujuan Data Penyerapan Lulusan */}
       <div className="card p-5 border-surface-border shadow-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -377,6 +401,60 @@ export default function PimpinanDashboardPage() {
             <p className="text-xs text-slate-500 py-3 text-center">Belum ada laporan realisasi PK yang dikirim.</p>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Diagram bulat capaian: realisasi vs target (SVG murni) ─── */
+function AchievementDonut({ label, target, real, color }) {
+  const size = 148
+  const R = 58
+  const C = 2 * Math.PI * R
+  const t = Math.max(0, Number(target) || 0)
+  const r = Math.max(0, Number(real) || 0)
+  const pct = t > 0 ? (r / t) * 100 : 0
+  const shown = Math.min(100, pct)
+  const sisa = Math.max(0, t - r)
+  const c = size / 2
+
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-200/70 bg-white px-4 py-4">
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg viewBox={`0 0 ${size} ${size}`} style={{ width: '100%', height: '100%', display: 'block' }} role="img" aria-label={`Capaian ${label}`}>
+          <circle cx={c} cy={c} r={R} fill="none" stroke="#E2E8F0" strokeWidth={15} />
+          <circle
+            cx={c}
+            cy={c}
+            r={R}
+            fill="none"
+            stroke={color}
+            strokeWidth={15}
+            strokeLinecap="round"
+            strokeDasharray={`${((shown / 100) * C).toFixed(1)} ${C.toFixed(1)}`}
+            transform={`rotate(-90 ${c} ${c})`}
+          />
+          <text x={c} y={c - 2} textAnchor="middle" fontSize={26} fontWeight={900} fill="#0F172A" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {t > 0 ? `${Math.round(pct)}%` : '–'}
+          </text>
+          <text x={c} y={c + 18} textAnchor="middle" fontSize={11} fontWeight={700} fill="#64748B">
+            {label}
+          </text>
+        </svg>
+      </div>
+      <div className="min-w-0 space-y-1.5 text-xs">
+        <p className="flex items-center justify-between gap-3">
+          <span className="text-slate-500 font-semibold">Target PK</span>
+          <span className="font-black text-slate-900 tabular-nums">{fmtNum(t)}</span>
+        </p>
+        <p className="flex items-center justify-between gap-3">
+          <span className="text-slate-500 font-semibold">Realisasi</span>
+          <span className="font-black tabular-nums" style={{ color }}>{fmtNum(r)}</span>
+        </p>
+        <p className="flex items-center justify-between gap-3 border-t border-slate-100 pt-1.5">
+          <span className="text-slate-500 font-semibold">Sisa target</span>
+          <span className="font-black text-slate-900 tabular-nums">{fmtNum(sisa)}</span>
+        </p>
       </div>
     </div>
   )
